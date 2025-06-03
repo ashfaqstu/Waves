@@ -1,27 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
-import spaceGif from "../../assets/space.gif";
-import pixelArtImage from "../../assets/cat.png";
-import cat1 from "../../assets/cat1.gif";
-import cat2 from "../../assets/cat2.gif";
-import frame from "../../assets/frame.png";
-import music from "../../assets/music.mp3";
-import ChatBox from "../../components/ChatBox";
+const spaceGif      = "/assets/space.gif";
+const pixelArtImage = "/assets/cat.png";
+const cat1          = "/assets/cat1.gif";
+const cat2          = "/assets/cat2.gif";
+const frame         = "/assets/frame.PNG";
+const music         = "/assets/music.mp3";
 
-import frame1Img from "../../assets/frames/1.png";
-import frame2Img from "../../assets/frames/2.png";
-import frame3Img from "../../assets/frames/3.png";
-import frame4Img from "../../assets/frames/4.png";
-import frame5Img from "../../assets/frames/5.png";
-import frame6Img from "../../assets/frames/6.png";
-import frame7Img from "../../assets/frames/7.png";
-import frame8Img from "../../assets/frames/8.png";
-import frame9Img from "../../assets/frames/square_9.png";
-import frame10Img from "../../assets/frames/square_10.png";
-import frame11Img from "../../assets/frames/square_11.png";
-import frame12Img from "../../assets/frames/square_12.png";
-import frame13Img from "../../assets/frames/square_13.png";
+const frame1Img  = "/assets/frames/1.png";
+const frame2Img  = "/assets/frames/2.png";
+const frame3Img  = "/assets/frames/3.png";
+const frame4Img  = "/assets/frames/4.png";
+const frame5Img  = "/assets/frames/5.png";
+const frame6Img  = "/assets/frames/6.png";
+const frame7Img  = "/assets/frames/7.png";
+const frame8Img  = "/assets/frames/8.png";
+const frame9Img  = "/assets/frames/square_9.png";
+const frame10Img = "/assets/frames/square_10.png";
+const frame11Img = "/assets/frames/square_11.png";
+const frame12Img = "/assets/frames/square_12.png";
+const frame13Img = "/assets/frames/square_13.png";
+
+import ChatBox   from "../../components/ChatBox";
 import WavyTitle from "../../components/WavyTitle";
-
 const frames = [
   { start: 30, end: 34, img: frame1Img },
   { start: 34, end: 38, img: frame2Img },
