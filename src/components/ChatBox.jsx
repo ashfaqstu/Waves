@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { initializeApp } from "firebase/app";
 
-// Firebase config (replace with yours)
+/* ---------- tiny Firebase bootstrap -------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDhw3dM5WVOGHS0HlsY_aCKIf4EWDI0gYQ",
   authDomain: "wave-1ffd1.firebaseapp.com",
@@ -20,352 +20,225 @@ const firebaseConfig = {
   storageBucket: "wave-1ffd1.firebasestorage.app",
   messagingSenderId: "126773480796",
   appId: "1:126773480796:web:cf6b610b532b7445730599",
-  measurementId: "G-1H5H2R6KLV",
+};
+const db = getFirestore(initializeApp(firebaseConfig));
+
+/* ---------- helper for tiny toasts ---------------------------------- */
+const useToast = () => {
+  const [msg, setMsg] = useState("");
+  const pop = (t, ms = 2000) => { setMsg(t); setTimeout(() => setMsg(""), ms); };
+  return [msg, pop];
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+/* ---------- component ---------------------------------------------- */
+export default function ChatBox() {
+  /* wizard step & role */
+  const [step, setStep] = useState("role");   // role | login | register | send | read
+  const [role, setRole] = useState(null);     // wave | heat
 
-export default function CozyChatBox() {
-  const [role, setRole] = useState(null); // "wave" or "heat"
+  /* heat auth */
   const [userId, setUserId] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [pwd, setPwd]       = useState("");
+  const [logged, setLogged] = useState(false);
 
-  const [recipientId, setRecipientId] = useState("");
-  const [senderName, setSenderName] = useState("");
-  const [newMsg, setNewMsg] = useState("");
-  const [messages, setMessages] = useState([]);
-  const messagesEndRef = useRef(null);
+  /* message form / list */
+  const [recipient, setRecipient] = useState("");
+  const [senderName, setSender]   = useState("");
+  const [text, setText]           = useState("");
+  const [msgs, setMsgs]           = useState([]);
+  const msgsEnd = useRef(null);
 
-  const [loginError, setLoginError] = useState("");
-  const [registerError, setRegisterError] = useState("");
-  const [registerSuccess, setRegisterSuccess] = useState("");
-  const [messageStatus, setMessageStatus] = useState(null); // "success" | "error" | null
+  const [toast, pop] = useToast();
 
-  // Load messages for Heat (recipient)
+  /* read messages when heat is logged -------------------------------- */
   useEffect(() => {
-    if (!isLoggedIn || role !== "heat") {
-      setMessages([]);
-      return;
-    }
+    if (!(logged && role === "heat")) return;
     const q = query(
       collection(db, "messages"),
       where("recipientId", "==", userId),
       orderBy("createdAt")
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs);
-      scrollToBottom();
+    const unsub = onSnapshot(q, snap => {
+      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      msgsEnd.current?.scrollIntoView({ behavior: "smooth" });
     });
-    return () => unsubscribe();
-  }, [isLoggedIn, userId, role]);
+    return () => unsub();
+  }, [logged, role, userId]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  /* auth -------------------------------------------------------------- */
+  const doLogin = async () => {
+    if (!userId || !pwd)           return pop("Enter ID & password");
+    const snap = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
+    if (snap.empty)                return pop("ID not found");
+    if (snap.docs[0].data().password !== pwd) return pop("Wrong password");
+    setLogged(true);
+    setStep("read");
   };
 
-  // Login handler
-  const login = async () => {
-    setLoginError("");
-    if (!userId || !password) {
-      setLoginError("Please enter both ID and password.");
-      return;
-    }
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("userId", "==", userId));
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
-        setLoginError("User ID not found.");
-        return;
-      }
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
-      if (userData.password !== password) {
-        setLoginError("Incorrect password.");
-        return;
-      }
-      setIsLoggedIn(true);
-      setRegisterError("");
-      setRegisterSuccess("");
-    } catch (err) {
-      setLoginError("Login error: " + err.message);
-    }
+  const doRegister = async () => {
+    if (!userId || !pwd)           return pop("Enter ID & password");
+    const exists = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
+    if (!exists.empty)             return pop("ID already exists");
+    await addDoc(collection(db,"users"), { userId, password: pwd });
+    pop("Account created – log in");
+    setStep("login");
   };
 
-  // Register handler
-  const register = async () => {
-    setRegisterError("");
-    setRegisterSuccess("");
-    if (!userId || !password) {
-      setRegisterError("Please enter both ID and password.");
-      return;
-    }
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("userId", "==", userId));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        setRegisterError("User ID already exists.");
-        return;
-      }
-      await addDoc(usersRef, { userId, password });
-      setRegisterSuccess("Account created! Please login.");
-      setIsRegistering(false);
-      setUserId("");
-      setPassword("");
-      setLoginError("");
-    } catch (err) {
-      setRegisterError("Registration error: " + err.message);
-    }
+  /* send -------------------------------------------------------------- */
+  const send = async () => {
+    if (!recipient.trim() || !text.trim()) return;
+    await addDoc(collection(db,"messages"),{
+      recipientId : recipient.trim(),
+      senderName  : logged ? userId : (senderName.trim() || "Anonymous"),
+      senderId    : logged ? userId : null,
+      personalChat: logged,
+      text        : text.trim(),
+      createdAt   : serverTimestamp(),
+    });
+    pop("Sent ✔︎");
+    setText("");
+    if (!logged) setRecipient("");
   };
 
-  // Logout handler
-  const logout = () => {
-    setIsLoggedIn(false);
-    setUserId("");
-    setPassword("");
-    setMessages([]);
-    setRole(null);
+  /* step navigation -------------------------------------------------- */
+  const back = () => {
+    if (step === "role") return;
+    if (step === "login" || step === "register") { setStep("role"); return; }
+    if (step === "send" || step === "read")       { setStep("role"); return; }
   };
 
-  // Send message handler
-  const sendMessage = async () => {
-    if (!newMsg.trim()) return;
-
-    let recipient = recipientId.trim();
-    let name = senderName.trim() || "Anonymous";
-
-    if (role === "heat" && !recipient) return;
-    if (role === "wave" && !recipient) return;
-
-    const senderId = isLoggedIn ? userId : null;
-    const personalChat = isLoggedIn;
-
-    try {
-      await addDoc(collection(db, "messages"), {
-        recipientId: recipient,
-        senderName: isLoggedIn ? userId : name,
-        senderId,
-        text: newMsg.trim(),
-        createdAt: serverTimestamp(),
-        personalChat,
-      });
-
-      setMessageStatus("success");
-      setNewMsg("");
-      if (role === "wave" && !isLoggedIn) {
-        setRecipientId("");
-        setSenderName("");
-      }
-    } catch (err) {
-      setMessageStatus("error");
-      console.error("Message sending failed:", err);
-    }
-
-    setTimeout(() => setMessageStatus(null), 2000);
-  };
-
-  // Render
-  if (!role) {
-    // Role selection screen
-    return (
-      <div className="max-w-2xl mx-auto p-6 bg-purple-900 text-white rounded-lg shadow-lg flex flex-col items-center space-y-6">
-        <h2 className="text-3xl font-bold">Choose your role</h2>
-        <div className="flex space-x-10">
-          <button
-            onClick={() => setRole("wave")}
-            className="px-10 py-4 bg-pink-500 rounded-lg shadow hover:bg-pink-600 transition"
-          >
-            Wave (Sender)
-          </button>
-          <button
-            onClick={() => setRole("heat")}
-            className="px-10 py-4 bg-purple-700 rounded-lg shadow hover:bg-purple-800 transition"
-          >
-            Heat (Recipient)
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Logged in UI
+  /* ----------------------------------------------------------------- */
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-purple-900 text-white rounded-lg shadow-lg relative">
-      {role === "heat" && !isLoggedIn ? (
+    <div className="relative w-full rounded-2xl bg-white/10 backdrop-blur-md p-4 sm:p-6 text-white shadow-md">
+      {/* back arrow */}
+      {step !== "role" && (
+        <button onClick={back} className="absolute left-3 top-3 text-xl">←</button>
+      )}
+
+      {/* toast */}
+      {toast && <p className="absolute right-4 top-3 text-xs text-pink-200 animate-pulse">{toast}</p>}
+
+      {/* role --------------------------------------------------------- */}
+      {step === "role" && (
         <>
-          <h2 className="text-2xl font-bold mb-4">Login as Heat (Recipient)</h2>
+          <h2 className="text-center text-2xl font-bold mb-6">Choose role</h2>
+          <div className="flex gap-4">
+            <button
+              className="flex-1 py-3 bg-pink-500 rounded-lg hover:bg-pink-600 transition"
+              onClick={() => { setRole("wave"); setStep("send"); }}
+            >
+              Wave&nbsp;(Send)
+            </button>
+            <button
+              className="flex-1 py-3 bg-purple-600 rounded-lg hover:bg-purple-700 transition"
+              onClick={() => { setRole("heat"); setStep("login"); }}
+            >
+              Heat&nbsp;(Read)
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* login -------------------------------------------------------- */}
+      {step === "login" && (
+        <>
+          <h2 className="text-xl font-bold mb-4">Heat Login</h2>
           <input
-            type="text"
             placeholder="User ID"
             value={userId}
-            onChange={(e) => setUserId(e.target.value)}
+            onChange={e=>setUserId(e.target.value)}
             className="w-full p-2 mb-3 rounded text-black"
           />
           <input
             type="password"
             placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
+            value={pwd}
+            onChange={e=>setPwd(e.target.value)}
+            className="w-full p-2 mb-4 rounded text-black"
           />
-          {loginError && <p className="text-red-400 mb-2">{loginError}</p>}
-          <button
-            onClick={login}
-            className="w-full bg-pink-500 py-2 rounded hover:bg-pink-600 transition mb-3"
-          >
+          <button onClick={doLogin}
+            className="w-full py-2 bg-pink-500 rounded-lg hover:bg-pink-600 transition">
             Login
           </button>
-          <button
-            onClick={() => {
-              setIsRegistering(true);
-              setLoginError("");
-            }}
-            className="w-full bg-purple-700 py-2 rounded hover:bg-purple-800 transition"
-          >
-            Create an Account
-          </button>
-          {isRegistering && (
-            <div className="mt-4">
-              <h3 className="text-xl font-semibold mb-3">Register</h3>
-              <input
-                type="text"
-                placeholder="User ID"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="w-full p-2 mb-3 rounded text-black"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 mb-3 rounded text-black"
-              />
-              {registerError && (
-                <p className="text-red-400 mb-2">{registerError}</p>
-              )}
-              {registerSuccess && (
-                <p className="text-green-400 mb-2">{registerSuccess}</p>
-              )}
-              <button
-                onClick={register}
-                className="w-full bg-purple-700 py-2 rounded hover:bg-purple-800 transition mb-3"
-              >
-                Register
-              </button>
-              <button
-                onClick={() => setIsRegistering(false)}
-                className="underline text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <h2 className="text-2xl font-bold mb-4">
-            {role === "wave" ? "Wave (Sender)" : `Welcome, ${userId}`}
-          </h2>
-          {role === "heat" && (
-            <button
-              onClick={logout}
-              className="mb-4 bg-red-600 py-2 rounded hover:bg-red-700 transition"
-            >
-              Logout
-            </button>
-          )}
-
-          {/* Message form */}
-          <input
-            type="text"
-            placeholder="Recipient ID"
-            value={recipientId}
-            onChange={(e) => setRecipientId(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
-          />
-          {role === "wave" && (
-            <input
-              type="text"
-              placeholder="Your Name (Optional)"
-              value={senderName}
-              onChange={(e) => setSenderName(e.target.value)}
-              className="w-full p-2 mb-3 rounded text-black"
-            />
-          )}
-          <textarea
-            rows={4}
-            placeholder="Type your message"
-            value={newMsg}
-            onChange={(e) => setNewMsg(e.target.value)}
-            className="w-full p-2 mb-3 rounded resize-none text-black"
-          />
-
-          <div className="relative">
-            <button
-              onClick={sendMessage}
-              className="w-full bg-pink-500 py-2 rounded hover:bg-pink-600 transition"
-            >
-              Send Message
-            </button>
-
-            {messageStatus === "success" && (
-              <div className="absolute -top-10 right-4 animate-pop text-3xl select-none">
-                🐱sent
-              </div>
-            )}
-            {messageStatus === "error" && (
-              <div className="absolute -top-10 right-4 animate-pop text-3xl select-none">
-                😿not sent
-              </div>
-            )}
-          </div>
-
-          {/* Show messages only if logged in Heat */}
-          {role === "heat" && isLoggedIn && (
-            <>
-              <h3 className="mt-6 mb-2 font-semibold">Messages to You</h3>
-              <div className="max-h-48 overflow-y-auto border border-pink-300 rounded p-2 bg-pink-50 text-pink-900">
-                {messages.length === 0 ? (
-                  <p className="italic">No messages yet.</p>
-                ) : (
-                  messages.map(({ id, text, senderName }) => (
-                    <div key={id} className="mb-2 border-b border-pink-200 pb-1">
-                      <strong>{senderName}:</strong> {text}
-                    </div>
-                  ))
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            </>
-          )}
+          <p className="mt-3 text-center text-sm underline cursor-pointer"
+            onClick={()=>setStep("register")}>
+            Need an account? Register
+          </p>
         </>
       )}
 
-      <style>{`
-        @keyframes pop {
-          0% {
-            opacity: 0;
-            transform: scale(0.3);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.2);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1);
-          }
-        }
-        .animate-pop {
-          animation: pop 2s ease forwards;
-        }
-      `}</style>
+      {/* register ----------------------------------------------------- */}
+      {step === "register" && (
+        <>
+          <h2 className="text-xl font-bold mb-4">Create Heat Account</h2>
+          <input
+            placeholder="Choose User ID"
+            value={userId}
+            onChange={e=>setUserId(e.target.value)}
+            className="w-full p-2 mb-3 rounded text-black"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={pwd}
+            onChange={e=>setPwd(e.target.value)}
+            className="w-full p-2 mb-4 rounded text-black"
+          />
+          <button onClick={doRegister}
+            className="w-full py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">
+            Register
+          </button>
+        </>
+      )}
+
+      {/* send ---------------------------------------------------------- */}
+      {step === "send" && (
+        <>
+          <h2 className="text-xl font-bold mb-4">Send a Wave</h2>
+          <input
+            placeholder="Recipient ID"
+            value={recipient}
+            onChange={e=>setRecipient(e.target.value)}
+            className="w-full p-2 mb-3 rounded text-black"
+          />
+          <input
+            placeholder="Your name (optional)"
+            value={senderName}
+            onChange={e=>setSender(e.target.value)}
+            className="w-full p-2 mb-3 rounded text-black"
+          />
+          <textarea
+            rows={4}
+            placeholder="Message"
+            value={text}
+            onChange={e=>setText(e.target.value)}
+            className="w-full p-2 mb-4 rounded resize-none text-black"
+          />
+          <button onClick={send}
+            className="w-full py-2 bg-pink-500 rounded-lg hover:bg-pink-600 transition">
+            Send
+          </button>
+        </>
+      )}
+
+      {/* read ---------------------------------------------------------- */}
+      {step === "read" && (
+        <>
+          <h2 className="text-xl font-bold mb-4">Messages for {userId}</h2>
+          <div className="h-64 overflow-y-auto bg-white/5 rounded p-3 space-y-3">
+            {msgs.length === 0 ? (
+              <p className="italic text-center text-white/60">No messages yet</p>
+            ) : (
+              msgs.map(m => (
+                <div key={m.id} className="bg-white/10 p-2 rounded text-sm">
+                  <strong>{m.senderName}:</strong><br />{m.text}
+                </div>
+              ))
+            )}
+            <div ref={msgsEnd}/>
+          </div>
+        </>
+      )}
     </div>
   );
 }

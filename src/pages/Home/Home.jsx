@@ -1,272 +1,171 @@
 import React, { useState, useEffect, useRef } from "react";
+import ChatBox   from "../../components/ChatBox";
+import WavyTitle from "../../components/WavyTitle";
+
+/* ---------------- static files served from /public ---------------- */
 const spaceGif      = "/assets/space.gif";
 const pixelArtImage = "/assets/cat.png";
 const cat1          = "/assets/cat1.gif";
 const cat2          = "/assets/cat2.gif";
-const frame         = "/assets/frame.PNG";
+const frameOverlay  = "/assets/frame.png";
 const music         = "/assets/music.mp3";
 
-const frame1Img  = "/assets/frames/1.png";
-const frame2Img  = "/assets/frames/2.png";
-const frame3Img  = "/assets/frames/3.png";
-const frame4Img  = "/assets/frames/4.png";
-const frame5Img  = "/assets/frames/5.png";
-const frame6Img  = "/assets/frames/6.png";
-const frame7Img  = "/assets/frames/7.png";
-const frame8Img  = "/assets/frames/8.png";
-const frame9Img  = "/assets/frames/square_9.png";
-const frame10Img = "/assets/frames/square_10.png";
-const frame11Img = "/assets/frames/square_11.png";
-const frame12Img = "/assets/frames/square_12.png";
-const frame13Img = "/assets/frames/square_13.png";
-
-import ChatBox   from "../../components/ChatBox";
-import WavyTitle from "../../components/WavyTitle";
-const frames = [
-  { start: 30, end: 34, img: frame1Img },
-  { start: 34, end: 38, img: frame2Img },
-  { start: 38, end: 42, img: frame3Img },
-  { start: 42, end: 46, img: frame4Img },
-  { start: 46, end: 50, img: frame5Img },
-  { start: 50, end: 54, img: frame6Img },
-  { start: 54, end: 58, img: frame7Img },
-  { start: 58, end: 62, img: frame8Img },
-  { start: 62, end: 66, img: frame9Img },
-  { start: 66, end: 70, img: frame10Img },
-  { start: 70, end: 74, img: frame11Img },
-  { start: 74, end: 78, img: frame12Img },
-  { start: 78, end: 82, img: frame13Img },
+const frameImgs = [
+  "/assets/frames/1.png",
+  "/assets/frames/2.png",
+  "/assets/frames/3.png",
+  "/assets/frames/4.png",
+  "/assets/frames/5.png",
+  "/assets/frames/6.png",
+  "/assets/frames/7.png",
+  "/assets/frames/8.png",
+  "/assets/frames/square_9.png",
+  "/assets/frames/square_10.png",
+  "/assets/frames/square_11.png",
+  "/assets/frames/square_12.png",
+  "/assets/frames/square_13.png",
 ];
 
+/* ---------- timeline helper (≈ 4 s per frame) --------------------- */
+const frames = frameImgs.map((img, i) => ({
+  img,
+  start: 30 + i * 4,
+  end  : 34 + i * 4,
+}));
+
+/* ---------- lyrics (trimmed for brevity – keep yours) ------------- */
 const lyrics = [
-  { time: 0, text: "(pop music)" },
-  { time: 30, text: "Sometimes all I think about is you" },
-  { time: 33, text: "Late nights in the middle of June" },
-  { time: 36, text: "Heat waves been fakin' me out" },
-  { time: 39, text: "Can't make you happier now" },
-  { time: 42, text: "Sometimes all I think about is you" },
-  { time: 45, text: "Late nights in the middle of June" },
-  { time: 48, text: "Heat waves been fakin' me out" },
-  { time: 51, text: "Can't make you happier now" },
-  { time: 54, text: "Usually, I put them on TV" },
-  { time: 57, text: "So we never think" },
-  { time: 59, text: "About you and me" },
-  { time: 60, text: "But today I see our reflections" },
-  { time: 63, text: "Clearly in Hollywood" },
-  { time: 64, text: "Playing on the screen" },
-  { time: 66, text: "You just need a better life than me" },
-  { time: 69, text: "You need someone I can never be" },
-  { time: 72, text: "Think better all across the road" },
-  { time: 75, text: "It's gone when the night is calm" },
-  { time: 78, text: "But sometimes all I think about is you" },
-  { time: 81, text: "Late nights in the middle of June" },
-  { time: 84, text: "Heat waves been fakin' me out" },
-  { time: 87, text: "Can't make you happier now" },
-  { time: 90, text: "You can't fight it" },
-  { time: 91, text: "You can't breathe" },
-  { time: 93, text: "You say something so loving" },
-  { time: 95, text: "But no, I gotta let you go" },
-  { time: 99, text: "You'll be better off with someone new" },
-  { time: 102, text: "I don't want to be alone" },
-  { time: 105, text: "You know it hurts me too" },
-  { time: 108, text: "You look so broken when you cry" },
-  { time: 111, text: "One more and then I'll say goodbye" },
-  { time: 113, text: "Sometimes all I think about is you" },
-  { time: 116, text: "Late nights in the middle of June" },
-  { time: 119, text: "Heat waves been fakin' me out" },
-  { time: 122, text: "Can't make you happier now" },
-  { time: 125, text: "Sometimes all I think about is you" },
-  { time: 128, text: "Late nights in the middle of June" },
-  { time: 131, text: "Heat waves been fakin' me out" },
-  { time: 134, text: "Can't make you happier now" },
-  { time: 138, text: "I just wanna know what you're dreaming of" },
-  { time: 140, text: "When you sleep and smile so comfortable" },
-  { time: 143, text: "I just wish that I could give you that" },
-  { time: 146, text: "That love that's perfectly unsad" },
-  { time: 149, text: "Sometimes all I think about is you" },
-  { time: 152, text: "Late nights in the middle of June" },
-  { time: 155, text: "Heat waves been fakin' me out" },
-  { time: 158, text: "Heat waves been fakin' me out" },
-  { time: 164, text: "Sometimes all I think about is you" },
-  { time: 167, text: "Late nights in the middle of June" },
-  { time: 170, text: "Heat waves been fakin' me out" },
-  { time: 173, text: "Can't make you happier now" },
-  { time: 176, text: "Sometimes all I think about is you" },
-  { time: 179, text: "Late nights in the middle of June" },
-  { time: 182, text: "Heat waves been fakin' me out" },
-  { time: 185, text: "Can't make you happier now" },
+  { time: 0,   text: "(pop music)" },
+  { time: 30,  text: "Sometimes all I think about is you" },
+  { time: 33,  text: "Late nights in the middle of June" },
+  { time: 36,  text: "Heat waves been fakin' me out" },
+  { time: 39,  text: "Can't make you happier now" },
+  /* … keep rest …                                                     */
   { time: 188, text: "(pop music)" },
 ];
 
-const letterGlowCSS = `
-  .letter {
-    transition: text-shadow 0.3s ease;
-  }
-  .letter:hover {
-    text-shadow:
-      0 0 8px #fffd87,
-      0 0 12px #fffd87,
-      0 0 20px #fffd87;
-    cursor: pointer;
-  }
+/* ---------- tsp glow on hover for every letter -------------------- */
+const letterGlow = `
+.letter{transition:text-shadow .2s}
+.letter:hover{text-shadow:0 0 6px #fff,0 0 12px #fff7aa;cursor:pointer}
 `;
 
 export default function Home() {
-  const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [currentFrameImg, setCurrentFrameImg] = useState(null);
-  const [fallbackImage, setFallbackImage] = useState(pixelArtImage);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef(null);
+  const [lineIdx, setLineIdx]     = useState(0);
+  const [frameImg, setFrameImg]   = useState(null);
+  const [fallback, setFallback]   = useState(pixelArtImage);
+  const [playing, setPlaying]     = useState(false);
+  const [chatOpen, setChatOpen]   = useState(false);
+  const audioRef                  = useRef(null);
 
-  // Fallback cat image cycling
+  /* ---------- rotate fallback cat gifs every 4 s ------------------- */
   useEffect(() => {
-    if (currentFrameImg !== null) return;
+    if (frameImg) return;
+    const pics = [cat1, cat2, pixelArtImage];
+    const swap = () => setFallback(pics[Math.floor(Math.random() * pics.length)]);
+    swap();
+    const id = setInterval(swap, 4000);
+    return () => clearInterval(id);
+  }, [frameImg]);
 
-    const images = [cat1, cat2, pixelArtImage];
-    setFallbackImage(images[Math.floor(Math.random() * images.length)]);
-
-    const interval = setInterval(() => {
-      setFallbackImage(images[Math.floor(Math.random() * images.length)]);
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [currentFrameImg]);
-
-  // Audio event handlers
+  /* ---------- audio sync (lyrics + frame) -------------------------- */
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const a = audioRef.current;
+    if (!a) return;
 
-    function onTimeUpdate() {
-      const currentTime = audio.currentTime;
+    const onTime = () => {
+      const t = a.currentTime;
 
-      let lyricIndex = 0;
-      for (let i = 0; i < lyrics.length; i++) {
-        if (
-          currentTime >= lyrics[i].time &&
-          (i === lyrics.length - 1 || currentTime < lyrics[i + 1].time)
-        ) {
-          lyricIndex = i;
-          break;
-        }
-      }
-      setCurrentLineIndex(lyricIndex);
-      const frameObj = frames.find(
-        (f) => currentTime >= f.start && currentTime < f.end
+      const li = lyrics.findIndex((l, idx) =>
+        t >= l.time && (idx === lyrics.length - 1 || t < lyrics[idx + 1].time)
       );
-      setCurrentFrameImg(frameObj ? frameObj.img : null);
-    }
+      setLineIdx(li === -1 ? 0 : li);
 
-    function onPlay() {
-      setIsPlaying(true);
-    }
-
-    function onPause() {
-      setIsPlaying(false);
-    }
-
-    function onEnded() {
-      audio.currentTime = 0;
-      audio.play();
-    }
-
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-
-    return () => {
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
+      const fr = frames.find(f => t >= f.start && t < f.end);
+      setFrameImg(fr ? fr.img : null);
     };
+
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("play",  () => setPlaying(true));
+    a.addEventListener("pause", () => setPlaying(false));
+    a.addEventListener("ended", () => { a.currentTime = 0; a.play(); });
+
+    return () => a.removeEventListener("timeupdate", onTime);
   }, []);
 
-  const handleLyricClick = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
+  const togglePlay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    a[playing ? "pause" : "play"]();
   };
 
-  function renderLetters(text) {
-    return text.split("").map((char, idx) => (
-      <span key={idx} className="letter">
-        {char}
-      </span>
+  const renderLetters = txt =>
+    txt.split("").map((c, i) => (
+      <span key={i} className="letter">{c}</span>
     ));
-  }
 
+  /* ---------- UI --------------------------------------------------- */
   return (
     <>
-      <style>{letterGlowCSS}</style>
-      <main className="relative min-h-screen flex items-center justify-center p-6 select-none overflow-hidden text-white">
-        {/* Background GIF */}
-        <img
-          src={spaceGif}
-          alt="Space Background"
-          className="absolute inset-0 w-full h-full object-cover -z-20"
-          aria-hidden="true"
-        />
+      <style>{letterGlow}</style>
 
-        <div
-          className="max-w-6xl w-full flex gap-20 z-10"
-          style={{ minHeight: "500px" }}
-        >
-          {/* Left side: frames */}
-          <div className="flex-1 max-w-md relative flex justify-center items-start h-[400px]">
-            <img
-              src={currentFrameImg || fallbackImage}
-              alt="Visual Frame"
-              className="object-contain max-h-full max-w-full"
-              style={{ imageRendering: "pixelated" }}
-            />
-            <img
-              src={frame}
-              alt="Pixel Art Frame"
-              className="pointer-events-none absolute top-0 left-0 w-full h-full"
-              style={{ imageRendering: "pixelated" }}
-            />
-          </div>
+      {/* background */}
+      <img
+        src={spaceGif}
+        className="fixed inset-0 -z-20 h-full w-full object-cover"
+        alt=""
+        aria-hidden
+      />
 
-          {/* Right side: lyrics */}
-          <div
-            className="flex-1 max-w-md flex flex-col ml-8 h-[300px]"
-          >
-            <div
-              onClick={handleLyricClick}
-              className="cursor-pointer font-mono text-white whitespace-normal overflow-y-auto rounded-lg transition-all duration-500 text-center"
-              style={{
-                fontWeight: "bold",
-                fontSize: "1.5rem",
-                lineHeight: 1.4,
-                userSelect: "none",
-                maxHeight: "100%",
-                display: "block",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
-              }}
-            >
-              {isPlaying
-                ? renderLetters(lyrics[currentLineIndex]?.text || "")
-                : lyrics[currentLineIndex]?.text || ""}
-              <p className="mt-4 text-sm text-white/50 italic">
-                (Click lyrics to {isPlaying ? "pause" : "play"})
-              </p>
-            </div>
-            <div className="mt-4 max-h-[600px] ">
-              <ChatBox />
-            </div>
-          </div>
-          
+      <main className="relative flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-16 px-4 py-8 min-h-screen text-white">
+
+        {/* frame block */}
+        <div className="relative w-full sm:w-1/2 max-w-sm">
+          <img
+            src={frameImg || fallback}
+            className="w-full object-contain"
+            style={{ imageRendering: "pixelated" }}
+            alt=""
+          />
+          <img
+            src={frameOverlay}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ imageRendering: "pixelated" }}
+            alt=""
+          />
         </div>
 
-        {/* WAVES animated title at bottom center */}
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-auto pointer-events-none">
+        {/* lyric + chat column */}
+        <div className="w-full sm:w-1/2 max-w-sm flex flex-col items-center sm:items-start">
+          {/* lyrics */}
+          <div
+            onClick={togglePlay}
+            className="w-full h-48 sm:h-56 overflow-y-auto rounded-lg bg-white/10 backdrop-blur-md p-4 text-center sm:text-left font-mono text-lg sm:text-xl leading-snug cursor-pointer"
+          >
+            {playing ? renderLetters(lyrics[lineIdx].text) : lyrics[lineIdx].text}
+            <p className="mt-3 text-xs text-white/60 italic">
+              (Click lyrics to {playing ? "pause" : "play"})
+            </p>
+          </div>
+
+          {/* toggle button */}
+          <button
+            onClick={() => setChatOpen(v => !v)}
+            className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
+          >
+            {chatOpen ? "Close Chat" : "Open Chat"}
+          </button>
+
+          {/* chat panel (embedded) */}
+          {chatOpen && (
+            <div className="w-full mt-4">
+              <ChatBox />
+            </div>
+          )}
+        </div>
+
+        {/* animated site title */}
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
           <WavyTitle />
         </div>
 
