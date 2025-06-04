@@ -1,3 +1,4 @@
+// src/pages/Home/Home.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   collection,
@@ -38,17 +39,39 @@ export default function Home() {
   const [frameImg,  setFrameImg]  = useState(null);
   const [fallback,  setFallback]  = useState(pixelArtImage);
   const [playing,   setPlaying]   = useState(false);
+
+  // Whether the chat panel is open
   const [chatOpen,  setChatOpen]  = useState(false);
 
-  /* "anon" → show anonymous bar; "login" → mount ChatBox */
+  // “anon” → show anonymous bar; “login” → mount ChatBox at login
   const [entryChoice, setEntryChoice] = useState(null);
 
-  /* fields for anonymous bar */
+  // Fields for anonymous bar
   const [anonId, setAnonId]       = useState("");
   const [anonText, setAnonText]   = useState("");
   const [anonToast, setAnonToast] = useState("");
 
   const audioRef = useRef(null);
+
+  /************************************************************************
+   *  1) Read `?waveId=` from URL so that:
+   *     • If present, anonId is prefilled.
+   *     • We auto‐open the chat panel and show the two choices.
+   *     • Pass it as initialPartner to ChatBox if “Login” is chosen.
+   ************************************************************************/
+  const [prefilledWaveId, setPrefilledWaveId] = useState(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wid = params.get("waveId");
+    if (wid) {
+      const trimmed = wid.trim();
+      setPrefilledWaveId(trimmed);
+      setAnonId(trimmed);
+      // Immediately open the chat panel and show choices
+      setChatOpen(true);
+      setEntryChoice(null);
+    }
+  }, []);
 
   /* rotate fallback cat gifs every 4 s (when no frame) */
   useEffect(() => {
@@ -92,7 +115,10 @@ export default function Home() {
     a[playing ? "pause" : "play"]();
   };
 
-  /* Write one anonymous message to Firestore */
+  /************************************************************************
+   *  2) Anonymous send: write a Firestore document with senderId=""
+   *     After sending, we “Cancel” automatically and clear the URL.
+   ************************************************************************/
   const sendAnon = async () => {
     if (!anonId.trim() || !anonText.trim()) {
       setAnonToast("Fill both fields");
@@ -109,10 +135,13 @@ export default function Home() {
         createdAt  : serverTimestamp(),
       });
       setAnonToast("Sent!");
-      setAnonId("");
       setAnonText("");
       setTimeout(() => {
-        setAnonToast("");
+        // Remove ?waveId from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Reset everything
+        setPrefilledWaveId(null);
+        setAnonId("");
         setEntryChoice(null);
         setChatOpen(false);
       }, 2000);
@@ -120,6 +149,50 @@ export default function Home() {
       setAnonToast("Send failed");
       setTimeout(() => setAnonToast(""), 2000);
     }
+  };
+
+  /************************************************************************
+   *  3) “Share” button (only when logged in) will share to Instagram Story.
+   ************************************************************************/
+  const igshare = () => {
+    const user = localStorage.getItem("waveUser");
+    if (!user) return;
+    const { userId: me } = JSON.parse(user);
+
+    const bg = encodeURIComponent(spaceGif);
+    const sticker1 = encodeURIComponent(frameOverlay);
+    const sticker2 = encodeURIComponent(cat1);
+    const storyLink = encodeURIComponent(window.location.origin + `/?waveId=${me}`);
+
+    const igUri = 
+      `instagram-stories://share?` +
+      `backgroundImage=${bg}` +
+      `&stickerImage=${sticker1}` +
+      `&stickerImage=${sticker2}` +
+      `&attributionURL=${storyLink}`;
+
+    window.location.href = igUri;
+
+    // Fallback: copy the link to clipboard for desktop
+    setTimeout(() => {
+      navigator.clipboard.writeText(window.location.origin + `/?waveId=${me}`)
+        .then(() => alert("Link copied to clipboard! Share it as a Story."))
+        .catch(() => {});
+    }, 1000);
+  };
+
+  /************************************************************************
+   *  4) “Cancel all” handler—used under both sub‐panels (“Anonymous” & “Login”):
+   *     • Remove ?waveId from URL
+   *     • Reset state
+   *     • Close the chat panel
+   ************************************************************************/
+  const cancelAll = () => {
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setPrefilledWaveId(null);
+    setAnonId("");
+    setEntryChoice(null);
+    setChatOpen(false);
   };
 
   return (
@@ -157,19 +230,33 @@ export default function Home() {
             toggle={togglePlay}
           />
 
-          <button
-            onClick={() => {
-              setEntryChoice(null);
-              setChatOpen(v => !v);
-            }}
-            className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
-          >
-            {chatOpen ? "Close Chat" : "Open Chat"}
-          </button>
+          {/* ─── “Share” button (only if logged in) ─── */}
+          {localStorage.getItem("waveUser") && (
+            <button
+              onClick={igshare}
+              className="mt-4 px-4 py-2 rounded-full bg-indigo-500 hover:bg-indigo-600 transition shadow-lg"
+            >
+              Share as Story
+            </button>
+          )}
 
+          {/* ─── “Open Chat” / “Close Chat” toggle ─── */}
+          {!prefilledWaveId && (
+            <button
+              onClick={() => {
+                setEntryChoice(null);
+                setChatOpen(v => !v);
+              }}
+              className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
+            >
+              {chatOpen ? "Close Chat" : "Open Chat"}
+            </button>
+          )}
+
+          {/* ─── Chat pane ─── */}
           {chatOpen && (
             <div className="w-full mt-4 relative">
-              {/* ─── Step 1: show two small horizontal buttons, pushed down a bit ─── */}
+              {/* ───── Step 1: Two small buttons “Anonymous” / “Login” ───── */}
               {!entryChoice && (
                 <div className="absolute top-12 left-1/2 -translate-x-1/2
                                 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 p-3 flex gap-4">
@@ -188,12 +275,15 @@ export default function Home() {
                 </div>
               )}
 
-              {/* ─── Step 2a: if “anon” chosen, show inline ID+Message bar ─── */}
+              {/* ───── Step 2a: “Anonymous” chosen → show form ───── */}
               {entryChoice === "anon" && (
-                <div className="bg-white/10 backdrop-blur-md p-4 rounded-lg shadow-md">
-                  {anonToast && (
-                    <p className="text-green-300 text-sm mb-2">{anonToast}</p>
-                  )}
+                <div className="bg-white/10 backdrop-blur-md p-4 rounded-lg shadow-md relative">
+                  {/* An “X” or small text “Cancel” underneath */}
+                  <div className="mb-3">
+                    {anonToast && (
+                      <p className="text-green-300 text-sm">{anonToast}</p>
+                    )}
+                  </div>
                   <input
                     type="text"
                     placeholder="Recipient ID"
@@ -220,13 +310,28 @@ export default function Home() {
                   >
                     Send
                   </button>
+                  <button
+                    onClick={cancelAll}
+                    className="mt-3 w-full text-sm text-white/80 hover:text-white"
+                  >
+                    Cancel
+                  </button>
                 </div>
               )}
 
-              {/* ─── Step 2b: if “login” chosen, mount ChatBox at login ─── */}
+              {/* ───── Step 2b: “Login” chosen → mount ChatBox ───── */}
               {entryChoice === "login" && (
-                <div className="mt-4">
-                  <ChatBox initialStep="login" />
+                <div className="mt-4 relative">
+                  <ChatBox
+                    initialStep="login"
+                    initialPartner={prefilledWaveId}
+                  />
+                  <button
+                    onClick={cancelAll}
+                    className="mt-3 w-full text-sm text-white/80 hover:text-white"
+                  >
+                    Cancel
+                  </button>
                 </div>
               )}
             </div>
