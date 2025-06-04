@@ -1,244 +1,658 @@
-import React, { useState, useEffect, useRef } from "react";
+/*  ChatBox.jsx
+    ────────────────────────────────────────────────────────────────
+    • Entry screen  : choose “Send Anonymously” or “Login”
+    • Anonymous send: simple ID + Message form, no login required
+    • Heat inbox    : messages land here even after Wave contacts exist (Anonymous shows as plain text)
+    • Wave list     : unread badge • recent-first • search • delete contact
+    • Wave start    : input + “Start” button (no coin)
+    • DM            : full history, Enter-to-send (Shift+Enter → newline)
+    • Settings      : change Wave-ID & pseudoname; updates contacts
+*/
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  serverTimestamp,
-  getDocs,
+  collection, addDoc, query, where, orderBy,
+  onSnapshot, serverTimestamp, getDocs,
+  deleteDoc, updateDoc
 } from "firebase/firestore";
-import { initializeApp } from "firebase/app";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup,
+  onAuthStateChanged, signOut
+} from "firebase/auth";
+import { db } from "../firebase";
 
-/* ---------- tiny Firebase bootstrap -------------------------------- */
-const firebaseConfig = {
-  apiKey: "AIzaSyDhw3dM5WVOGHS0HlsY_aCKIf4EWDI0gYQ",
-  authDomain: "wave-1ffd1.firebaseapp.com",
-  projectId: "wave-1ffd1",
-  storageBucket: "wave-1ffd1.firebasestorage.app",
-  messagingSenderId: "126773480796",
-  appId: "1:126773480796:web:cf6b610b532b7445730599",
-};
-const db = getFirestore(initializeApp(firebaseConfig));
-
-/* ---------- helper for tiny toasts ---------------------------------- */
+/* ─────────── hooks & small helpers ─────────── */
 const useToast = () => {
   const [msg, setMsg] = useState("");
-  const pop = (t, ms = 2000) => { setMsg(t); setTimeout(() => setMsg(""), ms); };
+  const pop = (t, ms = 2200) => { setMsg(t); setTimeout(() => setMsg(""), ms); };
   return [msg, pop];
 };
+const useScrollBottom = () => {
+  const end = useRef(null);
+  const scroll = useCallback(() => end.current?.scrollIntoView({ behavior: "smooth" }), []);
+  return [end, scroll];
+};
 
-/* ---------- component ---------------------------------------------- */
-export default function ChatBox() {
-  /* wizard step & role */
-  const [step, setStep] = useState("role");   // role | login | register | send | read
-  const [role, setRole] = useState(null);     // wave | heat
+/* Firestore helpers */
+const saveContact = async (owner, partner, name) =>
+  addDoc(collection(db, "contacts"), {
+    ownerId: owner,
+    partnerId: partner,
+    ...(name ? { partnerName: name } : {}),
+    createdAt: serverTimestamp(),
+  });
 
-  /* heat auth */
+const saveMutual = (a, b, aName, bName) =>
+  Promise.all([
+    saveContact(a, b, bName).catch(() => {}),
+    saveContact(b, a, aName).catch(() => {}),
+  ]);
+
+const deleteMutual = async (a, b) => {
+  const rm = async (owner, partner) => {
+    const snap = await getDocs(
+      query(
+        collection(db, "contacts"),
+        where("ownerId", "==", owner),
+        where("partnerId", "==", partner)
+      )
+    );
+    return Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  };
+  await Promise.all([rm(a, b), rm(b, a)]);
+};
+
+/* ─────────── tiny UI atoms ─────────── */
+const Panel = ({ back, toast, children }) => (
+  <div className="relative w-full rounded-xl bg-white/10 backdrop-blur-md
+                  p-4 sm:p-6 text-white shadow-lg">
+    {back && (
+      <button onClick={back} className="absolute left-3 top-3">←</button>
+    )}
+    {toast && (
+      <p className="absolute right-4 top-3 text-xs text-pink-200 animate-pulse">
+        {toast}
+      </p>
+    )}
+    {children}
+  </div>
+);
+
+const Btn = ({ children, onClick, className = "" }) => (
+  <button
+    onClick={onClick}
+    className={`w-full py-2 bg-pink-500 rounded-lg hover:bg-pink-600 transition-all duration-300 ease-out ${className}`}>
+    {children}
+  </button>
+);
+
+const Input = ({ ph, v, s, pw = false, onKey }) => (
+  <input
+    type={pw ? "password" : "text"}
+    placeholder={ph}
+    value={v}
+    onChange={e => s(e.target.value)}
+    onKeyDown={onKey}
+    className="w-full p-2 mb-3 rounded text-black"
+  />
+);
+
+const Textarea = ({ v, s, onKeyDown }) => (
+  <textarea
+    rows={4}
+    placeholder="Message"
+    value={v}
+    onChange={e => s(e.target.value)}
+    onKeyDown={onKeyDown}
+    className="w-full p-2 mb-4 rounded resize-none text-black"
+  />
+);
+
+/* ─────────── component ─────────── */
+export default function ChatBox({ initialStep = "login" }) {
+  const [step, setStep] = useState(initialStep);
+    // entry|anonSend|login|register|googleInit|choose|settings|heat|waveList|waveChat
+
+  /* auth/profile */
   const [userId, setUserId] = useState("");
-  const [pwd, setPwd]       = useState("");
-  const [logged, setLogged] = useState(false);
+  const [password, setPwd] = useState("");
+  const [pseudo, setPseudo] = useState("");
+  const [userDoc, setUserDoc] = useState(null); // {uid,userId,pseudoname}
+  const logged = !!userDoc;
+  const auth = getAuth();
+  const provider = new GoogleAuthProvider();
 
-  /* message form / list */
-  const [recipient, setRecipient] = useState("");
-  const [senderName, setSender]   = useState("");
-  const [text, setText]           = useState("");
-  const [msgs, setMsgs]           = useState([]);
-  const msgsEnd = useRef(null);
+  /* chat state */
+  const [heatMsgs, setHeatMsgs] = useState([]);
+  const [contacts, setContacts] = useState([]);   // raw contacts
+  const [partners, setPartners] = useState([]);   // enriched with unread & lastTs
+  const [partnerId, setPartnerId] = useState("");
+  const [partnerName, setPartnerName] = useState("");
+  const [dmMsgs, setDmMsgs] = useState([]);
+  const [text, setText] = useState("");
+  const [newWaveId, setNewWaveId] = useState("");
+  const [search, setSearch] = useState("");
 
-  const [toast, pop] = useToast();
+  /* anonymous send state */
+  const [anonId, setAnonId] = useState("");
+  const [anonText, setAnonText] = useState("");
 
-  /* read messages when heat is logged -------------------------------- */
+  const [heatEnd, scrollHeat] = useScrollBottom();
+  const [dmEnd,   scrollDm]   = useScrollBottom();
+  const [toast,   pop]        = useToast();
+
+  /* ─── boot: restore or listen auth ─── */
   useEffect(() => {
-    if (!(logged && role === "heat")) return;
+    const saved = localStorage.getItem("waveUser");
+    if (saved) {
+      setUserDoc(JSON.parse(saved));
+      setStep("choose");
+    } else {
+      const unsub = onAuthStateChanged(auth, async fb => {
+        if (!fb) return setStep("login");
+        const snap = await getDocs(
+          query(collection(db, "users"), where("uid", "==", fb.uid))
+        );
+        if (snap.empty) {
+          setUserDoc({ uid: fb.uid });
+          setStep("googleInit");
+        } else {
+          const d = snap.docs[0].data();
+          const u = { uid: d.uid, userId: d.userId, pseudoname: d.pseudoname };
+          setUserDoc(u);
+          localStorage.setItem("waveUser", JSON.stringify(u));
+          setStep("choose");
+        }
+      });
+      return () => unsub();
+    }
+  }, []);
+
+  /* ─── Heat listener ─── */
+  useEffect(() => {
+    if (!(logged && step === "heat")) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, "messages"),
+        where("recipientId", "==", userDoc.userId),
+        orderBy("createdAt")
+      ),
+      snap => {
+        setHeatMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        scrollHeat();
+      }
+    );
+    return () => unsub();
+  }, [logged, step, userDoc]);
+
+  /* ─── contacts listener ─── */
+  useEffect(() => {
+    if (!(logged && (step === "waveList" || step === "choose"))) return;
+    const unsub = onSnapshot(
+      query(collection(db, "contacts"), where("ownerId", "==", userDoc.userId)),
+      snap => {
+        const list = snap.docs.map(d => ({
+          id: d.data().partnerId,
+          name: d.data().partnerName || d.data().partnerId,
+        }));
+        setContacts(list);
+      }
+    );
+    return () => unsub();
+  }, [logged, step, userDoc]);
+
+  /* ─── unread counts & recency meta ─── */
+  useEffect(() => {
+    if (!logged || contacts.length === 0) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, "messages"),
+        where("personalChat", "==", true),
+        orderBy("createdAt", "desc")
+      ),
+      snap => {
+        const meta = new Map(
+          contacts.map(c => [c.id, { ...c, unread: 0, lastTs: 0 }])
+        );
+        snap.docs.forEach(d => {
+          const m = d.data();
+          if (!(m.senderId === userDoc.userId || m.recipientId === userDoc.userId)) return;
+          const other = m.senderId === userDoc.userId ? m.recipientId : m.senderId;
+          if (!meta.has(other)) return;
+          const e = meta.get(other);
+          const ts = m.createdAt?.toMillis?.() || 0;
+          if (ts > e.lastTs) e.lastTs = ts;
+          if (!m.read && m.senderId === other && m.recipientId === userDoc.userId) e.unread += 1;
+        });
+        setPartners([...meta.values()].sort((a, b) => b.lastTs - a.lastTs));
+      }
+    );
+    return () => unsub();
+  }, [logged, contacts, userDoc]);
+
+  /* ─── DM listener + mark read on open ─── */
+  useEffect(() => {
+    if (!(logged && step === "waveChat" && partnerId)) { setDmMsgs([]); return; }
     const q = query(
       collection(db, "messages"),
-      where("recipientId", "==", userId),
+      where("personalChat", "==", true),
+      where("senderId", "in", [userDoc.userId, partnerId]),
       orderBy("createdAt")
     );
-    const unsub = onSnapshot(q, snap => {
-      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      msgsEnd.current?.scrollIntoView({ behavior: "smooth" });
+    const unsub = onSnapshot(q, async snap => {
+      const batch = [];
+      const list = [];
+      snap.docs.forEach(doc => {
+        const m = doc.data();
+        if (
+          (m.senderId === userDoc.userId && m.recipientId === partnerId) ||
+          (m.senderId === partnerId && m.recipientId === userDoc.userId)
+        ) {
+          list.push({ id: doc.id, ...m });
+          if (
+            !m.read &&
+            m.senderId === partnerId &&
+            m.recipientId === userDoc.userId
+          )
+            batch.push(updateDoc(doc.ref, { read: true }));
+        }
+      });
+      if (batch.length) await Promise.all(batch);
+      setDmMsgs(list);
+      scrollDm();
     });
     return () => unsub();
-  }, [logged, role, userId]);
+  }, [logged, step, partnerId, userDoc]);
 
-  /* auth -------------------------------------------------------------- */
-  const doLogin = async () => {
-    if (!userId || !pwd)           return pop("Enter ID & password");
-    const snap = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
-    if (snap.empty)                return pop("ID not found");
-    if (snap.docs[0].data().password !== pwd) return pop("Wrong password");
-    setLogged(true);
-    setStep("read");
+  /* ─── auth helpers ─── */
+  const register = async () => {
+    if (!userId || !password || !pseudo) return pop("Fill all fields");
+    if (
+      !(await getDocs(query(collection(db, "users"), where("userId", "==", userId)))).empty
+    )
+      return pop("ID exists");
+    await addDoc(collection(db, "users"), { userId, password, pseudoname: pseudo });
+    pop("Account created"); setStep("login");
   };
-
-  const doRegister = async () => {
-    if (!userId || !pwd)           return pop("Enter ID & password");
-    const exists = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
-    if (!exists.empty)             return pop("ID already exists");
-    await addDoc(collection(db,"users"), { userId, password: pwd });
-    pop("Account created – log in");
-    setStep("login");
+  const manualLogin = () => {
+    if (!userId || !password) return pop("Enter credentials");
+    getDocs(query(collection(db, "users"), where("userId", "==", userId))).then(
+      snap => {
+        if (snap.empty) return pop("ID not found");
+        const d = snap.docs[0].data();
+        if (d.password !== password) return pop("Wrong password");
+        const u = { uid: null, userId: d.userId, pseudoname: d.pseudoname };
+        setUserDoc(u);
+        localStorage.setItem("waveUser", JSON.stringify(u));
+        setStep("choose");
+      }
+    );
   };
-
-  /* send -------------------------------------------------------------- */
-  const send = async () => {
-    if (!recipient.trim() || !text.trim()) return;
-    await addDoc(collection(db,"messages"),{
-      recipientId : recipient.trim(),
-      senderName  : logged ? userId : (senderName.trim() || "Anonymous"),
-      senderId    : logged ? userId : null,
-      personalChat: logged,
-      text        : text.trim(),
-      createdAt   : serverTimestamp(),
+  const googleSignIn = () =>
+    signInWithPopup(auth, provider).catch(() => pop("Google sign-in failed"));
+  const logout = () =>
+    signOut(auth)
+      .catch(() => {})
+      .then(() => {
+        localStorage.removeItem("waveUser");
+        setUserDoc(null);
+        setStep("login");
+      });
+  const saveGoogleInit = async () => {
+    if (!userId || !pseudo) return pop("Fill both");
+    if (
+      !(await getDocs(query(collection(db, "users"), where("userId", "==", userId)))).empty
+    )
+      return pop("ID exists");
+    await addDoc(collection(db, "users"), {
+      uid: auth.currentUser.uid,
+      userId,
+      pseudoname: pseudo,
     });
-    pop("Sent ✔︎");
-    setText("");
-    if (!logged) setRecipient("");
+    const u = { uid: auth.currentUser.uid, userId, pseudoname: pseudo };
+    setUserDoc(u);
+    localStorage.setItem("waveUser", JSON.stringify(u));
+    setStep("choose");
   };
 
-  /* step navigation -------------------------------------------------- */
-  const back = () => {
-    if (step === "role") return;
-    if (step === "login" || step === "register") { setStep("role"); return; }
-    if (step === "send" || step === "read")       { setStep("role"); return; }
+  /* ─── send DM ─── */
+  const sendDm = () => {
+    if (!partnerId.trim() || !text.trim()) return;
+    addDoc(collection(db, "messages"), {
+      recipientId: partnerId.trim(),
+      senderName : userDoc.pseudoname,
+      senderId   : userDoc.userId,
+      personalChat:true,
+      text,
+      read:false,
+      createdAt: serverTimestamp(),
+    })
+    .then(() => setText(""))
+    .catch(() => pop("Message failed"));
   };
 
-  /* ----------------------------------------------------------------- */
-  return (
-    <div className="relative w-full rounded-2xl bg-white/10 backdrop-blur-md p-4 sm:p-6 text-white shadow-md">
-      {/* back arrow */}
-      {step !== "role" && (
-        <button onClick={back} className="absolute left-3 top-3 text-xl">←</button>
-      )}
+  /* ─── send anonymous ─── */
+  const sendAnon = () => {
+    if (!anonId.trim() || !anonText.trim()) return pop("Fill both fields");
+    addDoc(collection(db, "messages"), {
+      recipientId: anonId.trim(),
+      senderName: "Anonymous",
+      senderId: "",
+      personalChat: false,
+      text: anonText,
+      createdAt: serverTimestamp(),
+    })
+    .then(() => {
+      pop("Sent anonymously");
+      setAnonId("");
+      setAnonText("");
+      setStep("entry");
+    })
+    .catch(() => pop("Send failed"));
+  };
 
-      {/* toast */}
-      {toast && <p className="absolute right-4 top-3 text-xs text-pink-200 animate-pulse">{toast}</p>}
+  /* ─── start Wave by ID ─── */
+  const startWaveById = () => {
+    const id = newWaveId.trim();
+    if (!id) return;
+    setPartnerId(id);
+    setPartnerName(id);
+    setStep("waveChat");
+    setNewWaveId("");
+  };
 
-      {/* role --------------------------------------------------------- */}
-      {step === "role" && (
-        <>
-          <h2 className="text-center text-2xl font-bold mb-6">Choose role</h2>
-          <div className="flex gap-4">
-            <button
-              className="flex-1 py-3 bg-pink-500 rounded-lg hover:bg-pink-600 transition"
-              onClick={() => { setRole("wave"); setStep("send"); }}
-            >
-              Wave&nbsp;(Send)
-            </button>
-            <button
-              className="flex-1 py-3 bg-purple-600 rounded-lg hover:bg-purple-700 transition"
-              onClick={() => { setRole("heat"); setStep("login"); }}
-            >
-              Heat&nbsp;(Read)
-            </button>
-          </div>
-        </>
-      )}
+  /* ─── delete contact ─── */
+  const removePartner = pid => {
+    if (!window.confirm("Remove contact for both users?")) return;
+    deleteMutual(userDoc.userId, pid).then(() =>
+      setContacts(c => c.filter(x => x.id !== pid))
+    );
+    if (partnerId === pid) {
+      setStep("waveList");
+      setPartnerId("");
+      setDmMsgs([]);
+    }
+  };
 
-      {/* login -------------------------------------------------------- */}
-      {step === "login" && (
-        <>
-          <h2 className="text-xl font-bold mb-4">Heat Login</h2>
-          <input
-            placeholder="User ID"
-            value={userId}
-            onChange={e=>setUserId(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={pwd}
-            onChange={e=>setPwd(e.target.value)}
-            className="w-full p-2 mb-4 rounded text-black"
-          />
-          <button onClick={doLogin}
-            className="w-full py-2 bg-pink-500 rounded-lg hover:bg-pink-600 transition">
-            Login
-          </button>
-          <p className="mt-3 text-center text-sm underline cursor-pointer"
-            onClick={()=>setStep("register")}>
-            Need an account? Register
-          </p>
-        </>
-      )}
+  /* ─── settings edit ─── */
+  const [newId, setNewId] = useState("");
+  const [newName, setNewName] = useState("");
+  const openSettings = () => {
+    setNewId(userDoc.userId);
+    setNewName(userDoc.pseudoname);
+    setStep("settings");
+  };
+  const saveSettings = async () => {
+    if (!newId || !newName) return pop("Fill both");
+    if (
+      newId !== userDoc.userId &&
+      !(await getDocs(query(collection(db, "users"), where("userId", "==", newId)))).empty
+    )
+      return pop("ID exists");
+    const snap = await getDocs(
+      query(
+        collection(db, "users"),
+        userDoc.uid ? where("uid", "==", userDoc.uid) : where("userId", "==", userDoc.userId)
+      )
+    );
+    await Promise.all(
+      snap.docs.map(d =>
+        updateDoc(d.ref, { userId: newId, pseudoname: newName })
+      )
+    );
+    /* update contacts */
+    const c1 = await getDocs(
+      query(collection(db, "contacts"), where("ownerId", "==", userDoc.userId))
+    );
+    const c2 = await getDocs(
+      query(collection(db, "contacts"), where("partnerId", "==", userDoc.userId))
+    );
+    await Promise.all([
+      ...c1.docs.map(d => updateDoc(d.ref, { ownerId: newId })),
+      ...c2.docs.map(d => updateDoc(d.ref, { partnerId: newId, partnerName: newId })),
+    ]);
+    const u = { ...userDoc, userId: newId, pseudoname: newName };
+    setUserDoc(u);
+    localStorage.setItem("waveUser", JSON.stringify(u));
+    pop("Profile updated");
+    setStep("choose");
+  };
 
-      {/* register ----------------------------------------------------- */}
-      {step === "register" && (
-        <>
-          <h2 className="text-xl font-bold mb-4">Create Heat Account</h2>
-          <input
-            placeholder="Choose User ID"
-            value={userId}
-            onChange={e=>setUserId(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={pwd}
-            onChange={e=>setPwd(e.target.value)}
-            className="w-full p-2 mb-4 rounded text-black"
-          />
-          <button onClick={doRegister}
-            className="w-full py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">
-            Register
-          </button>
-        </>
-      )}
+  /* ─── key helpers ─── */
+  const onLoginEnter = e => e.key === "Enter" && manualLogin();
+  const onRegEnter   = e => e.key === "Enter" && register();
+  const onGoEnter    = e => e.key === "Enter" && saveGoogleInit();
+  const onMsgKey     = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDm(); } };
+  const onAnonKey    = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAnon(); } };
 
-      {/* send ---------------------------------------------------------- */}
-      {step === "send" && (
-        <>
-          <h2 className="text-xl font-bold mb-4">Send a Wave</h2>
-          <input
-            placeholder="Recipient ID"
-            value={recipient}
-            onChange={e=>setRecipient(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
-          />
-          <input
-            placeholder="Your name (optional)"
-            value={senderName}
-            onChange={e=>setSender(e.target.value)}
-            className="w-full p-2 mb-3 rounded text-black"
-          />
-          <textarea
-            rows={4}
-            placeholder="Message"
-            value={text}
-            onChange={e=>setText(e.target.value)}
-            className="w-full p-2 mb-4 rounded resize-none text-black"
-          />
-          <button onClick={send}
-            className="w-full py-2 bg-pink-500 rounded-lg hover:bg-pink-600 transition">
-            Send
-          </button>
-        </>
-      )}
-
-      {/* read ---------------------------------------------------------- */}
-      {step === "read" && (
-        <>
-          <h2 className="text-xl font-bold mb-4">Messages for {userId}</h2>
-          <div className="h-64 overflow-y-auto bg-white/5 rounded p-3 space-y-3">
-            {msgs.length === 0 ? (
-              <p className="italic text-center text-white/60">No messages yet</p>
-            ) : (
-              msgs.map(m => (
-                <div key={m.id} className="bg-white/10 p-2 rounded text-sm">
-                  <strong>{m.senderName}:</strong><br />{m.text}
-                </div>
-              ))
-            )}
-            <div ref={msgsEnd}/>
-          </div>
-        </>
-      )}
-    </div>
+  /* ─── derived Wave list ─── */
+  const filtered = partners.filter(
+    p =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.id.toLowerCase().includes(search.toLowerCase())
   );
+
+  /* ─────────── UI branches ─────────── */
+
+  /* Entry: choose anonymous or login */
+  
+
+  /* Anonymous send */
+  
+
+  /* ---------- login ---------- */
+  if (step === "login")
+    return (
+      <Panel toast={toast}>
+        <h2 className="title mb-4">Login</h2>
+        <Input ph="User ID" v={userId} s={setUserId} />
+        <Input ph="Password" v={password} s={setPwd} pw onKey={onLoginEnter} />
+        <Btn onClick={manualLogin}>Login</Btn>
+        <Btn className="mt-3 bg-purple-600 hover:bg-purple-700" onClick={googleSignIn}>
+          Login&nbsp;with&nbsp;Google
+        </Btn>
+        <p className="link mt-3" onClick={() => setStep("register")}>
+          Need an account? Register
+        </p>
+      </Panel>
+    );
+
+  /* ---------- register ---------- */
+  if (step === "register")
+    return (
+      <Panel back={() => setStep("login")} toast={toast}>
+        <h2 className="title mb-4">Create account</h2>
+        <Input ph="User ID" v={userId} s={setUserId} />
+        <Input ph="Password" v={password} s={setPwd} pw onKey={onRegEnter} />
+        <Input ph="Pseudoname" v={pseudo} s={setPseudo} />
+        <Btn onClick={register}>Register</Btn>
+      </Panel>
+    );
+
+  /* ---------- googleInit ---------- */
+  if (step === "googleInit")
+    return (
+      <Panel toast={toast}>
+        <h2 className="title mb-4">Set up your Wave profile</h2>
+        <Input ph="Wave ID" v={userId} s={setUserId} onKey={onGoEnter} />
+        <Input ph="Pseudoname" v={pseudo} s={setPseudo} />
+        <Btn onClick={saveGoogleInit}>Save</Btn>
+      </Panel>
+    );
+
+  /* ---------- choose ---------- */
+  if (step === "choose")
+    return (
+      <Panel>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <h2 className="title mb-0">{userDoc.pseudoname}</h2>
+            <button onClick={openSettings} title="Settings">⚙️</button>
+          </div>
+          <button onClick={logout} className="text-xs underline text-pink-200">Logout</button>
+        </div>
+        <div className="flex gap-4">
+          <Btn onClick={() => setStep("waveList")}>Wave</Btn>
+          <Btn onClick={() => setStep("heat")}>Heat</Btn>
+        </div>
+      </Panel>
+    );
+
+  /* ---------- settings ---------- */
+  if (step === "settings")
+    return (
+      <Panel back={() => setStep("choose")} toast={toast}>
+        <h2 className="title mb-4">Edit profile</h2>
+        <Input ph="New Wave-ID" v={newId} s={setNewId} />
+        <Input
+          ph="New Pseudoname"
+          v={newName}
+          s={setNewName}
+          onKey={e => e.key === "Enter" && saveSettings()}
+        />
+        <Btn onClick={saveSettings}>Save changes</Btn>
+      </Panel>
+    );
+
+  /* ─── Heat inbox (anonymous messages not clickable) ─── */
+  if (step === "heat")
+    return (
+      <Panel back={() => setStep("choose")} toast={toast}>
+        <h2 className="title mb-2">Inbox for {userDoc.userId}</h2>
+        <div className="h-72 overflow-y-auto space-y-3 pr-1">
+          {heatMsgs.length === 0 ? (
+            <p className="italic text-white/60">No messages</p>
+          ) : (
+            heatMsgs.map(m => (
+              <div key={m.id} className="bg-white/10 p-3 rounded text-sm space-y-1">
+                {/*
+                  Only make the sender clickable/addable if m.senderId is non‐empty.
+                  If m.senderId === "", assume "Anonymous" → show plain text.
+                */}
+                {m.senderId
+                  ? (
+                    <span
+                      onClick={() => saveMutual(userDoc.userId, m.senderId, userDoc.pseudoname, m.senderName)}
+                      className="font-semibold cursor-pointer hover:text-pink-300 hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.9)]">
+                      {m.senderName}
+                    </span>
+                  )
+                  : (
+                    <span className="font-semibold">
+                      {m.senderName}
+                    </span>
+                  )
+                }
+                <span>: {m.text}</span>
+              </div>
+            ))
+          )}
+          <div ref={heatEnd} />
+        </div>
+      </Panel>
+    );
+
+  /* ─── Wave list ─── */
+  if (step === "waveList")
+    return (
+      <Panel back={() => setStep("choose")}>
+        <h2 className="title mb-4">Your waves</h2>
+
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search contact…"
+          className="w-full p-2 mb-3 rounded text-black"
+        />
+
+        <div className="relative mb-6 p-4 bg-white/10 rounded border-2 border-white/50 my-4">
+          <input
+            value={newWaveId}
+            onChange={e => setNewWaveId(e.target.value)}
+            placeholder="Wave-ID"
+            className="w-full p-2 pr-20 rounded text-black placeholder-wave"
+          />
+          <button
+            onClick={startWaveById}
+            className="absolute right-0 top-0 h-full w-1/3 px-4 rounded-r
+                       bg-pink-500 hover:bg-pink-600 transition">
+            Start
+          </button>
+        </div>
+
+        {filtered.length === 0 ? (
+          <p className="italic text-center text-white/60">No chats</p>
+        ) : (
+          filtered.map(p => (
+            <div key={p.id} className="flex items-center gap-2 mb-2">
+              <Btn
+                className="flex-1 flex justify-between items-center"
+                onClick={() => {
+                  setPartnerId(p.id);
+                  setPartnerName(p.name);
+                  setStep("waveChat");
+                }}>
+                <span>{p.name}</span>
+                {p.unread > 0 && (
+                  <span className="ml-2 bg-red-600 px-2 rounded-full text-xs">
+                    {p.unread}
+                  </span>
+                )}
+              </Btn>
+              <button
+                title="Remove"
+                onClick={() => deleteMutual(userDoc.userId, p.id)}
+                className="text-lg leading-none hover:text-pink-300">
+                ×
+              </button>
+            </div>
+          ))
+        )}
+      </Panel>
+    );
+
+  /* ─── Wave chat ─── */
+  if (step === "waveChat")
+    return (
+      <Panel back={() => setStep("waveList")} toast={toast}>
+        <h2 className="title mb-1">{partnerName}</h2>
+        <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2">
+          {dmMsgs.map(m => (
+            <div
+              key={m.id}
+              className={`max-w-xs px-3 py-2 rounded-lg text-sm shadow
+                          ${m.senderId === userDoc.userId ? "bg-pink-500 self-end" : "bg-white/10"}`}>
+              {m.text}
+            </div>
+          ))}
+          <div ref={dmEnd} />
+        </div>
+        <Textarea v={text} s={setText} onKeyDown={onMsgKey} />
+        <Btn onClick={sendDm}>Send</Btn>
+      </Panel>
+    );
+
+  return null;
+}
+
+/* ─────────── inject minimal CSS once ─────────── */
+if (!document.getElementById("chatbox-css")) {
+  const style = document.createElement("style");
+  style.id = "chatbox-css";
+  style.textContent = `
+  .title{font-size:1.25rem;font-weight:700;text-align:center;margin-bottom:1rem}
+
+  /* Wave chat grow-and-fade */
+  @keyframes chatGrow{
+    0%   {opacity:0;transform:scale(.9);}
+    60%  {opacity:1;transform:scale(1.03);}
+    100% {opacity:1;transform:scale(1);}
+  }
+  .animate-chatGrow{animation:chatGrow .45s cubic-bezier(.25,.8,.25,1) both;}
+
+  /* placeholder bobbing */
+  @keyframes waveBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+  .placeholder-wave::placeholder{animation:waveBob 2.8s cubic-bezier(.45,.05,.55,.95) infinite;}
+  `;
+  document.head.appendChild(style);
 }

@@ -7,6 +7,15 @@
   padding: 0;
   font-family: "Press Start 2P", "Outfit", Arial, Helvetica, sans-serif;
 }
+@keyframes wave-bob {
+  0%,100% { transform: translateY(0);   }
+  50%     { transform: translateY(-4px);}
+}
+
+.placeholder-wave::placeholder {
+  animation: wave-bob 1.8s ease-in-out infinite;
+  /* feel free to tint it:  color: #f4d; */
+}
 
 /* Wave animation */
 @keyframes wave {
