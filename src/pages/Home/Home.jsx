@@ -45,8 +45,8 @@ export default function Home() {
   // Whether the chat panel is open
   const [chatOpen,  setChatOpen]  = useState(false);
 
-  // “anon” → show anonymous form; “login” → mount ChatBox
-  const [entryChoice, setEntryChoice] = useState(null);
+  // "chat" → ChatBox, "anon" → anonymous form
+  const [chatMode, setChatMode] = useState("chat");
 
   // Fields + state for anonymous form
   const [anonId, setAnonId]       = useState("");
@@ -58,8 +58,8 @@ export default function Home() {
   /************************************************************************
    *  1) Read `?waveId=` from URL:
    *     - Prefill anonId
-   *     - Auto-open chat panel + show the “Anonymous / Login” buttons
-   *     - Keep the waveId in prefilledWaveId to pass to ChatBox if “Login”
+   *     - Auto-open chat panel
+   *     - Keep the waveId in prefilledWaveId to pass to ChatBox
    ************************************************************************/
   const [prefilledWaveId, setPrefilledWaveId] = useState(null);
   useEffect(() => {
@@ -69,9 +69,9 @@ export default function Home() {
       const trimmed = wid.trim();
       setPrefilledWaveId(trimmed);
       setAnonId(trimmed);
-      // Open the chat panel immediately and show two buttons
+      // Open the chat panel immediately
+      setChatMode("chat");
       setChatOpen(true);
-      setEntryChoice(null);
     }
   }, []);
 
@@ -143,7 +143,7 @@ export default function Home() {
         window.history.replaceState({}, document.title, window.location.pathname);
         setPrefilledWaveId(null);
         setAnonId("");
-        setEntryChoice(null);
+        setChatMode("chat");
         setChatOpen(false);
       }, 2000);
     } catch {
@@ -200,7 +200,7 @@ export default function Home() {
     window.history.replaceState({}, document.title, window.location.pathname);
     setPrefilledWaveId(null);
     setAnonId("");
-    setEntryChoice(null);
+    setChatMode("chat");
     setChatOpen(false);
   };
 
@@ -277,15 +277,12 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── “Open Chat” toggle (only if no ?waveId) ─── */}
+           {/* ─── "Open Chat" toggle (only if no ?waveId) ─── */}
           {!prefilledWaveId && (
             <div className="relative w-full">
               {chatOpen && (
                 <button
-                  onClick={() => {
-                    setEntryChoice(null);
-                    setChatOpen(false);
-                  }}
+                  onClick={cancelAll}
                   className="absolute top-2 right-2 text-white text-xl hover:text-pink-300 transition"
                   title="Close Chat"
                 >
@@ -296,7 +293,7 @@ export default function Home() {
               {!chatOpen && (
                 <button
                   onClick={() => {
-                    setEntryChoice(null);
+                    setChatMode("chat");
                     setChatOpen(true);
                   }}
                   className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
@@ -312,37 +309,15 @@ export default function Home() {
           {/* ─── Chat Panel ─── */}
           {chatOpen && (
             <div className="w-full mt-4 relative">
-              {/* Step 1: Two small buttons “Anonymous” / “Login” */}
-               {/* CANCEL (✖) in top-right, but only if ?waveId=... */}
-                {prefilledWaveId && (
-                  <button
-                    onClick={cancelAll}
-                    className="absolute top-2 right-2 text-white text-xl hover:text-pink-300 transition"
-                    title="Cancel"
-                  >
-                    ✖
-                  </button>
-                )}
-              {!entryChoice && (
-                <div className="absolute top-12 left-1/2 -translate-x-1/2
-                                rounded-lg bg-white/20 backdrop-blur-md border border-white/30 p-3 flex gap-4">
-                  <button
-                    onClick={() => setEntryChoice("anon")}
-                    className="px-4 py-1 bg-white/30 backdrop-blur-sm text-black rounded-md hover:bg-white/40 transition"
-                  >
-                    Anonymous
-                  </button>
-                  <button
-                    onClick={() => setEntryChoice("login")}
-                    className="px-4 py-1 bg-white/30 backdrop-blur-sm text-black rounded-md hover:bg-white/40 transition"
-                  >
-                    Login
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={cancelAll}
+                className="absolute top-2 right-2 text-white text-xl hover:text-pink-300 transition"
+                title="Close"
+              >
+                ✖
+              </button>
 
-              {/* Step 2a: “Anonymous” chosen → show form */}
-              {entryChoice === "anon" && (
+              {chatMode === "anon" ? (
                 <div className="bg-white/20 backdrop-blur-md p-4 rounded-lg shadow-md">
                   <div className="mb-3">
                     {anonToast && (
@@ -375,27 +350,18 @@ export default function Home() {
                   >
                     Send
                   </button>
-                  <button
-                    onClick={cancelAll}
-                    className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
-                  >
-                    Cancel
-                  </button>
                 </div>
-              )}
-
-              {/* Step 2b: “Login” chosen → mount ChatBox */}
-              {entryChoice === "login" && (
+              ) : (
                 <div className="mt-4 relative">
                   <ChatBox
-                    initialStep="login"
+                    initialStep="heat"
                     initialPartner={prefilledWaveId}
                   />
                   <button
-                    onClick={cancelAll}
+                    onClick={() => setChatMode("anon")}
                     className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
                   >
-                    Cancel
+                    Anonymous
                   </button>
                 </div>
               )}
@@ -413,3 +379,5 @@ export default function Home() {
     </>
   );
 }
+
+
