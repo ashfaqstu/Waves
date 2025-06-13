@@ -4,7 +4,9 @@
     • Now accepts `initialStep` (defaults to "login") and
       `initialPartner` (waveId from the query param), so that
       after login or if already logged in, it will open DM with that partner.
-    • Entry / anonSend are removed; we handle them in Home.jsx now.
+    • Now accepts `initialStep` (defaults to "login"),
+      `initialPartner` (waveId from the query param), and an optional
+      `onAnon` callback to switch to the anonymous form in the parent.
     • Everything else (heat, waveList, waveChat, settings) remains.
 */
 
@@ -110,7 +112,8 @@ const Textarea = ({ v, s, onKeyDown }) => (
 /* ─────────── component ─────────── */
 export default function ChatBox({
   initialStep = "login",
-  initialPartner = null // if non-null, a Wave-ID to immediately open DM with
+  initialPartner = null, // if non-null, a Wave-ID to immediately open DM with
+  onAnon = null,
 }) {
   const [step, setStep] = useState(initialStep);
     // possible: login | register | googleInit | choose | settings | heat | waveList | waveChat
@@ -613,6 +616,14 @@ export default function ChatBox({
         </div>
         <Textarea v={text} s={setText} onKeyDown={onMsgKey}/>
         <Btn onClick={sendDm}>Send</Btn>
+        {onAnon && (
+          <button
+            onClick={onAnon}
+            className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
+          >
+            Anonymous
+          </button>
+        )}
       </Panel>
     );
 

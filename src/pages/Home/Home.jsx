@@ -356,13 +356,8 @@ export default function Home() {
                   <ChatBox
                     initialStep="heat"
                     initialPartner={prefilledWaveId}
+                    onAnon={() => setChatMode("anon")}
                   />
-                  <button
-                    onClick={() => setChatMode("anon")}
-                    className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
-                  >
-                    Anonymous
-                  </button>
                 </div>
               )}
             </div>
