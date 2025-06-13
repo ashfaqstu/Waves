@@ -54,3 +54,31 @@
 .animate-pop {
   animation: pop 2s ease forwards;
 }
+/* Retro styles */
+.pixel-border {
+  border: 3px solid #fff;
+  box-shadow: inset -3px -3px 0 #000, inset 3px 3px 0 #000;
+}
+
+@keyframes retro-glow {
+  0%,100% { box-shadow: inset -3px -3px 0 #000, inset 3px 3px 0 #000; }
+  50% { box-shadow: inset -3px -3px 0 #000, inset 3px 3px 0 #000, 0 0 4px #fff; }
+}
+.retro-glow {
+  animation: retro-glow 3s infinite;
+}
+
+.retro-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #666 #222;
+}
+.retro-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+.retro-scrollbar::-webkit-scrollbar-track {
+  background: #222;
+}
+.retro-scrollbar::-webkit-scrollbar-thumb {
+  background: #666;
+  border: 2px solid #222;
+}

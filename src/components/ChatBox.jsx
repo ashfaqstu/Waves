@@ -66,7 +66,7 @@ const deleteMutual = async (a, b) => {
 /* ─────────── tiny UI atoms ─────────── */
 const Panel = ({ back, toast, children }) => (
   <div className="relative w-full rounded-xl bg-white/10 backdrop-blur-md
-                  p-4 sm:p-6 text-white shadow-lg">
+                  p-4 sm:p-6 text-white/90 shadow-lg pixel-border retro-glow">
     {back && (
       <button onClick={back} className="absolute left-3 top-3">←</button>
     )}
@@ -513,8 +513,9 @@ export default function ChatBox({
   if(step==="heat")
     return (
       <Panel back={()=>setStep("choose")} toast={toast}>
-        <h2 className="title mb-2">Inbox for {userDoc.userId}</h2>
-        <div className="h-72 overflow-y-auto space-y-3 pr-1">
+        <h2 className="title ">Inbox for {userDoc.userId}</h2>
+        <p className="text-xs text-white/60 ">Click name to add to Waves</p>
+        <div className="h-72 overflow-y-auto space-y-3 pr-1 retro-scrollbar">
           {heatMsgs.length===0
             ? <p className="italic text-white/60">No messages</p>
             : heatMsgs.map(m=>(
@@ -523,12 +524,12 @@ export default function ChatBox({
                     ? (
                       <span
                         onClick={()=>saveMutual(userDoc.userId,m.senderId,userDoc.pseudoname,m.senderName)}
-                        className="font-semibold cursor-pointer hover:text-pink-300 hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.9)]">
+                        className="font-semibold text-purple-300 cursor-pointer hover:text-yellow-200 hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.9)]">
                         {m.senderName}
                       </span>
                     )
                     : (
-                      <span className="font-semibold">
+                      <span className="font-semibold text-red-300">
                         {m.senderName}
                       </span>
                     )
@@ -604,7 +605,7 @@ export default function ChatBox({
     return (
       <Panel back={()=>setStep("waveList")} toast={toast}>
         <h2 className="title mb-1">{partnerName}</h2>
-        <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2">
+         <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2 retro-scrollbar">
           {dmMsgs.map(m=>(
             <div key={m.id}
                  className={`max-w-xs px-3 py-2 rounded-lg text-sm shadow
