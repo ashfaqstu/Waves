@@ -356,18 +356,6 @@ export default function ChatBox({
     setNewWaveId("");
   };
 
-  /* ─── delete contact ─── */
-  const removePartner = async pid=>{
-    if(!window.confirm("Remove contact for both users?"))return;
-    await deleteMutual(userDoc.userId,pid);
-    setContacts(c=>c.filter(x=>x.id!==pid));
-    if(partnerId===pid){
-      setPartnerId("");
-      setDmMsgs([]);
-      setStep("waveList");
-    }
-  };
-
   /* ─── settings edit ─── */
   const [newId, setNewId] = useState("");
   const [newName, setNewName] = useState("");
