@@ -144,7 +144,13 @@ export default function ChatBox({
     const saved = localStorage.getItem("waveUser");
     if (saved) {
       setUserDoc(JSON.parse(saved));
-      setStep(initialStep === "waveChat" && initialPartner ? "waveChat" : "choose");
+      if (initialPartner) {
+        setPartnerId(initialPartner);
+        setPartnerName(initialPartner);
+        setStep("waveChat");
+      } else {
+        setStep(initialStep);
+      }
     } else {
       const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!firebaseUser) { setStep("login"); return; }
@@ -161,19 +167,18 @@ export default function ChatBox({
           const u = { uid: data.uid, userId: data.userId, pseudoname: data.pseudoname };
           setUserDoc(u);
           localStorage.setItem("waveUser", JSON.stringify(u));
-          // If we have an initialPartner provided, jump straight into waveChat:
           if (initialPartner) {
             setPartnerId(initialPartner);
             setPartnerName(initialPartner);
             setStep("waveChat");
           } else {
-            setStep("choose");
+            setStep(initialStep);
           }
         }
       });
       return ()=>unsub();
     }
-  }, [initialStep, initialPartner]);
+  }, [initialStep, initialPartner, auth]);
 
   /* If user logs in (step→choose), but we have initialPartner, immediately open DM */
   useEffect(() => {
@@ -197,7 +202,7 @@ export default function ChatBox({
       scrollHeat();
     });
     return ()=>unsub();
-  },[logged,step,userDoc]);
+  }, [logged, step, userDoc, scrollHeat]);
 
   /* contacts listener ─── */
   useEffect(()=>{
@@ -273,7 +278,7 @@ export default function ChatBox({
       scrollDm();
     });
     return ()=>unsub();
-  },[logged,step,partnerId,userDoc]);
+  }, [logged, step, partnerId, userDoc, scrollDm]);
 
   /* ─── auth helpers ─── */
   const register = async()=>{
@@ -292,9 +297,13 @@ export default function ChatBox({
     const u = { uid:null, userId:d.userId, pseudoname:d.pseudoname };
     setUserDoc(u);
     localStorage.setItem("waveUser", JSON.stringify(u));
-    // If there was an initialPartner, after setUserDoc, our useEffect will fire and switch to waveChat.
-    // Otherwise go to choose.
-    if(!initialPartner) setStep("choose");
+    if (initialPartner) {
+      setPartnerId(initialPartner);
+      setPartnerName(initialPartner);
+      setStep("waveChat");
+    } else {
+      setStep(initialStep);
+    }
   };
   const googleSignIn = ()=> signInWithPopup(auth,provider).catch(()=>pop("Google sign-in failed"));
   const logout = ()=>
@@ -317,13 +326,12 @@ export default function ChatBox({
     const u = { uid: auth.currentUser.uid, userId, pseudoname: pseudo };
     setUserDoc(u);
     localStorage.setItem("waveUser", JSON.stringify(u));
-    // If initialPartner present, go straight to waveChat
-    if(initialPartner) {
+    if (initialPartner) {
       setPartnerId(initialPartner);
       setPartnerName(initialPartner);
       setStep("waveChat");
     } else {
-      setStep("choose");
+      setStep(initialStep);
     }
   };
 

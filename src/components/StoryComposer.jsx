@@ -23,7 +23,7 @@ export default function StoryComposer({
       loaded += 1;
       if (loaded === 2) setIsReady(true);
     };
-    [bgImg.current, frameImg.current].forEach((img, idx) => {
+    [bgImg.current, frameImg.current].forEach(img => {
       img.crossOrigin = "anonymous";
       img.onload = onLoad;
       img.onerror = onLoad;
@@ -76,7 +76,7 @@ export default function StoryComposer({
       if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: 'Story Video' });
-        } catch (err) {
+        } catch {
           // user cancelled or error
         }
       } else {
