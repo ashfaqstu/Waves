@@ -1,4 +1,5 @@
 // src/pages/Home/Home.jsx
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   collection,
@@ -9,7 +10,8 @@ import WavyTitle   from "../../components/WavyTitle";
 import ChatBox     from "../../components/ChatBox";
 import LyricsPanel from "../../components/LyricsPanel";
 import { lyrics }  from "../../data/lyrics";
-import { db }      from "../../firebase";  
+import { db }      from "../../firebase";
+import StoryComposer from "../../components/StoryComposer";
 
 /* ---------- static assets from /public ----------------------------- */
 const spaceGif      = "/assets/space.gif";
@@ -43,10 +45,10 @@ export default function Home() {
   // Whether the chat panel is open
   const [chatOpen,  setChatOpen]  = useState(false);
 
-  // “anon” → show anonymous bar; “login” → mount ChatBox at login
+  // “anon” → show anonymous form; “login” → mount ChatBox
   const [entryChoice, setEntryChoice] = useState(null);
 
-  // Fields for anonymous bar
+  // Fields + state for anonymous form
   const [anonId, setAnonId]       = useState("");
   const [anonText, setAnonText]   = useState("");
   const [anonToast, setAnonToast] = useState("");
@@ -54,10 +56,10 @@ export default function Home() {
   const audioRef = useRef(null);
 
   /************************************************************************
-   *  1) Read `?waveId=` from URL so that:
-   *     • If present, anonId is prefilled.
-   *     • We auto‐open the chat panel and show the two choices.
-   *     • Pass it as initialPartner to ChatBox if “Login” is chosen.
+   *  1) Read `?waveId=` from URL:
+   *     - Prefill anonId
+   *     - Auto-open chat panel + show the “Anonymous / Login” buttons
+   *     - Keep the waveId in prefilledWaveId to pass to ChatBox if “Login”
    ************************************************************************/
   const [prefilledWaveId, setPrefilledWaveId] = useState(null);
   useEffect(() => {
@@ -67,13 +69,13 @@ export default function Home() {
       const trimmed = wid.trim();
       setPrefilledWaveId(trimmed);
       setAnonId(trimmed);
-      // Immediately open the chat panel and show choices
+      // Open the chat panel immediately and show two buttons
       setChatOpen(true);
       setEntryChoice(null);
     }
   }, []);
 
-  /* rotate fallback cat gifs every 4 s (when no frame) */
+  /* rotate fallback cat GIFs every 4 s (when no frame) */
   useEffect(() => {
     if (frameImg) return;
     const pics = [cat1, cat2, pixelArtImage];
@@ -116,8 +118,8 @@ export default function Home() {
   };
 
   /************************************************************************
-   *  2) Anonymous send: write a Firestore document with senderId=""
-   *     After sending, we “Cancel” automatically and clear the URL.
+   *  2) Anonymous send: write to Firestore with senderId=""
+   *     After sending, clear ?waveId and reset UI
    ************************************************************************/
   const sendAnon = async () => {
     if (!anonId.trim() || !anonText.trim()) {
@@ -127,19 +129,18 @@ export default function Home() {
     }
     try {
       await addDoc(collection(db, "messages"), {
-        recipientId: anonId.trim(),
-        senderName : "Anonymous",
-        senderId   : "",
+        recipientId : anonId.trim(),
+        senderName  : "Anonymous",
+        senderId    : "",
         personalChat: false,
-        text       : anonText,
-        createdAt  : serverTimestamp(),
+        text        : anonText,
+        createdAt   : serverTimestamp(),
       });
       setAnonToast("Sent!");
       setAnonText("");
       setTimeout(() => {
-        // Remove ?waveId from URL
+        // Remove ?waveId from URL and reset state
         window.history.replaceState({}, document.title, window.location.pathname);
-        // Reset everything
         setPrefilledWaveId(null);
         setAnonId("");
         setEntryChoice(null);
@@ -152,40 +153,48 @@ export default function Home() {
   };
 
   /************************************************************************
-   *  3) “Share” button (only when logged in) will share to Instagram Story.
+   *  3) “Share as Story (Mobile)” logic
+   *     - Only works when Instagram is installed and assets are publicly reachable
+   *     - Uses a real <a href="…"> link for better success on iOS/Android
+   *     - Includes an Android intent fallback link for Chrome on Android
    ************************************************************************/
-  const igshare = () => {
-    const user = localStorage.getItem("waveUser");
-    if (!user) return;
-    const { userId: me } = JSON.parse(user);
+  const SITE_BASE = "https://wave-1ffd1.web.app";
+  const isMobile  = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    const bg = encodeURIComponent(spaceGif);
-    const sticker1 = encodeURIComponent(frameOverlay);
-    const sticker2 = encodeURIComponent(cat1);
-    const storyLink = encodeURIComponent(window.location.origin + `/?waveId=${me}`);
+  // We’ll build these only if the user is logged in
+  let instagramLink = "";
+  let androidIntentLink = "";
 
-    const igUri = 
+  const userJson = localStorage.getItem("waveUser");
+  if (userJson) {
+    const { userId: me } = JSON.parse(userJson);
+
+    // Build fully qualified URLs for each asset (must be HTTPS)
+    const bgUrl       = encodeURIComponent(`${SITE_BASE}/assets/space.gif`);
+    const sticker1Url = encodeURIComponent(`${SITE_BASE}/assets/frame.png`);
+    const sticker2Url = encodeURIComponent(`${SITE_BASE}/assets/cat1.gif`);
+    const storyLink   = encodeURIComponent(`${SITE_BASE}/?waveId=${me}`);
+
+    // instagram-stories:// deep link
+    instagramLink =
       `instagram-stories://share?` +
-      `backgroundImage=${bg}` +
-      `&stickerImage=${sticker1}` +
-      `&stickerImage=${sticker2}` +
+      `backgroundImage=${bgUrl}` +
+      `&stickerImage=${sticker1Url}` +
+      `&stickerImage=${sticker2Url}` +
       `&attributionURL=${storyLink}`;
 
-    window.location.href = igUri;
-
-    // Fallback: copy the link to clipboard for desktop
-    setTimeout(() => {
-      navigator.clipboard.writeText(window.location.origin + `/?waveId=${me}`)
-        .then(() => alert("Link copied to clipboard! Share it as a Story."))
-        .catch(() => {});
-    }, 1000);
-  };
+    // Android intent fallback
+    androidIntentLink =
+      `intent://share?` +
+      `backgroundImage=${bgUrl}` +
+      `&stickerImage=${sticker1Url}` +
+      `&stickerImage=${sticker2Url}` +
+      `&attributionURL=${storyLink}` +
+      `#Intent;package=com.instagram.android;scheme=instagram-stories;end;`;
+  }
 
   /************************************************************************
-   *  4) “Cancel all” handler—used under both sub‐panels (“Anonymous” & “Login”):
-   *     • Remove ?waveId from URL
-   *     • Reset state
-   *     • Close the chat panel
+   *  4) “Cancel” handler → remove ?waveId and reset everything
    ************************************************************************/
   const cancelAll = () => {
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -206,7 +215,7 @@ export default function Home() {
 
       <main className="relative flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-16 px-4 py-8 min-h-screen text-white">
 
-        {/* frame block */}
+        {/* ─── Left column: rotating frames / fallback ─── */}
         <div className="relative w-full sm:w-1/2 max-w-sm">
           <img
             src={frameImg || fallback}
@@ -222,7 +231,7 @@ export default function Home() {
           />
         </div>
 
-        {/* lyrics + chat column */}
+        {/* ─── Right column: lyrics, share button, chat ─── */}
         <div className="w-full sm:w-1/2 max-w-sm flex flex-col items-center sm:items-start">
           <LyricsPanel
             playing={playing}
@@ -230,55 +239,111 @@ export default function Home() {
             toggle={togglePlay}
           />
 
-          {/* ─── “Share” button (only if logged in) ─── */}
-          {localStorage.getItem("waveUser") && (
-            <button
-              onClick={igshare}
-              className="mt-4 px-4 py-2 rounded-full bg-indigo-500 hover:bg-indigo-600 transition shadow-lg"
-            >
-              Share as Story
-            </button>
+          {/* ─── “Share as Story” on Mobile ─── */}
+          {userJson && isMobile && (
+            <div className="mt-4 flex flex-col items-center gap-2">
+              {/* 1) Primary deep-link for iOS/Android */}
+              <a
+                href={instagramLink}
+                className="px-5 py-2 bg-indigo-500 text-white rounded-full hover:bg-indigo-600 transition"
+                style={{ textDecoration: "none" }}
+              >
+                Share as Story (Tap Here)
+              </a>
+
+              {/* 2) Android Intent fallback */}
+              <a
+                href={androidIntentLink}
+                className="px-5 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
+                style={{ textDecoration: "none" }}
+              >
+                Android Intent Fallback
+              </a>
+            </div>
           )}
 
-          {/* ─── “Open Chat” / “Close Chat” toggle ─── */}
+          {/* ─── “Download Story Image” on Desktop ─── */}
+          {userJson && !isMobile && (
+            <div className="w-full mt-4">
+              <StoryComposer
+                width={1080}
+                height={1920}
+                backgroundSrc={spaceGif}
+                frameSrc={frameOverlay}
+                catGifSrc={cat1}
+                downloadFilename="wave-story.png"
+                buttonClass="bg-green-600 hover:bg-green-700"
+              />
+            </div>
+          )}
+
+          {/* ─── “Open Chat” toggle (only if no ?waveId) ─── */}
           {!prefilledWaveId && (
-            <button
-              onClick={() => {
-                setEntryChoice(null);
-                setChatOpen(v => !v);
-              }}
-              className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
-            >
-              {chatOpen ? "Close Chat" : "Open Chat"}
-            </button>
+            <div className="relative w-full">
+              {chatOpen && (
+                <button
+                  onClick={() => {
+                    setEntryChoice(null);
+                    setChatOpen(false);
+                  }}
+                  className="absolute top-2 right-2 text-white text-xl hover:text-pink-300 transition"
+                  title="Close Chat"
+                >
+                  ✖
+                </button>
+              )}
+
+              {!chatOpen && (
+                <button
+                  onClick={() => {
+                    setEntryChoice(null);
+                    setChatOpen(true);
+                  }}
+                  className="mt-4 sm:mt-6 px-6 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition shadow-lg"
+                >
+                  Open Chat
+                </button>
+              )}
+            </div>
           )}
 
-          {/* ─── Chat pane ─── */}
+
+
+          {/* ─── Chat Panel ─── */}
           {chatOpen && (
             <div className="w-full mt-4 relative">
-              {/* ───── Step 1: Two small buttons “Anonymous” / “Login” ───── */}
+              {/* Step 1: Two small buttons “Anonymous” / “Login” */}
+               {/* CANCEL (✖) in top-right, but only if ?waveId=... */}
+                {prefilledWaveId && (
+                  <button
+                    onClick={cancelAll}
+                    className="absolute top-2 right-2 text-white text-xl hover:text-pink-300 transition"
+                    title="Cancel"
+                  >
+                    ✖
+                  </button>
+                )}
               {!entryChoice && (
                 <div className="absolute top-12 left-1/2 -translate-x-1/2
-                                rounded-lg bg-white/10 backdrop-blur-md border border-white/20 p-3 flex gap-4">
+                                rounded-lg bg-white/20 backdrop-blur-md border border-white/30 p-3 flex gap-4">
                   <button
                     onClick={() => setEntryChoice("anon")}
-                    className="px-4 py-1 bg-white/20 backdrop-blur-sm text-black rounded-md hover:bg-white/30 transition"
+                    className="px-4 py-1 bg-white/30 backdrop-blur-sm text-black rounded-md hover:bg-white/40 transition"
                   >
                     Anonymous
                   </button>
                   <button
                     onClick={() => setEntryChoice("login")}
-                    className="px-4 py-1 bg-white/20 backdrop-blur-sm text-black rounded-md hover:bg-white/30 transition"
+                    className="px-4 py-1 bg-white/30 backdrop-blur-sm text-black rounded-md hover:bg-white/40 transition"
                   >
                     Login
                   </button>
                 </div>
               )}
 
-              {/* ───── Step 2a: “Anonymous” chosen → show form ───── */}
+              {/* Step 2a: “Anonymous” chosen → show form */}
               {entryChoice === "anon" && (
-                <div className="bg-white/10 backdrop-blur-md p-4 rounded-lg shadow-md relative">
-                  {/* An “X” or small text “Cancel” underneath */}
+                <div className="bg-white/20 backdrop-blur-md p-4 rounded-lg shadow-md">
                   <div className="mb-3">
                     {anonToast && (
                       <p className="text-green-300 text-sm">{anonToast}</p>
@@ -306,20 +371,20 @@ export default function Home() {
                   />
                   <button
                     onClick={sendAnon}
-                    className="w-full py-2 bg-white/20 backdrop-blur-sm text-black rounded-lg hover:bg-white/30 transition"
+                    className="w-full py-2 bg-white/30 backdrop-blur-sm text-black rounded-lg hover:bg-white/40 transition"
                   >
                     Send
                   </button>
                   <button
                     onClick={cancelAll}
-                    className="mt-3 w-full text-sm text-white/80 hover:text-white"
+                    className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
                   >
                     Cancel
                   </button>
                 </div>
               )}
 
-              {/* ───── Step 2b: “Login” chosen → mount ChatBox ───── */}
+              {/* Step 2b: “Login” chosen → mount ChatBox */}
               {entryChoice === "login" && (
                 <div className="mt-4 relative">
                   <ChatBox
@@ -328,7 +393,7 @@ export default function Home() {
                   />
                   <button
                     onClick={cancelAll}
-                    className="mt-3 w-full text-sm text-white/80 hover:text-white"
+                    className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
                   >
                     Cancel
                   </button>
@@ -338,7 +403,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* animated site title */}
+        {/* Animated site title */}
         <div className="fixed bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
           <WavyTitle />
         </div>

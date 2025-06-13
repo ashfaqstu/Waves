@@ -475,8 +475,9 @@ export default function ChatBox({
           </button>
         </div>
         <div className="flex gap-4">
-          <Btn onClick={()=>setStep("waveList")}>Wave</Btn>
-          <Btn onClick={()=>setStep("heat")}>Heat</Btn>
+        <Btn onClick={()=>setStep("heat")}>Heat</Btn>
+          <Btn onClick={()=>setStep("waveList")}>Waves</Btn>
+          
         </div>
       </Panel>
     );
