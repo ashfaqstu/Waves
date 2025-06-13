@@ -63,6 +63,15 @@ const deleteMutual = async (a, b) => {
   await Promise.all([rm(a, b), rm(b, a)]);
 };
 
+const blockUserId = async (blocker, blocked) => {
+  await addDoc(collection(db, "blocks"), {
+    blockerId: blocker,
+    blockedId: blocked,
+    createdAt: serverTimestamp(),
+  });
+  await deleteMutual(blocker, blocked).catch(() => {});
+};
+
 /* ─────────── tiny UI atoms ─────────── */
 const Panel = ({ back, toast, children }) => (
   <div className="relative w-full rounded-xl bg-white/10 backdrop-blur-md
@@ -139,6 +148,7 @@ export default function ChatBox({
   const [text, setText] = useState("");
   const [newWaveId, setNewWaveId] = useState("");
   const [search, setSearch] = useState("");
+  const [blocked, setBlocked] = useState(new Set());
 
   const [heatEnd, scrollHeat] = useScrollBottom();
   const [dmEnd,   scrollDm]   = useScrollBottom();
@@ -200,6 +210,7 @@ export default function ChatBox({
     const q = query(
       collection(db,"messages"),
       where("recipientId","==", userDoc.userId),
+      where("personalChat","==", false),
       orderBy("createdAt")
     );
     const unsub = onSnapshot(q,snap=>{
@@ -224,6 +235,18 @@ export default function ChatBox({
     );
     return ()=>unsub();
   },[logged,step,userDoc]);
+
+  /* blocked list listener */
+  useEffect(() => {
+    if (!logged) return;
+    const unsub = onSnapshot(
+      query(collection(db, "blocks"), where("blockerId", "==", userDoc.userId)),
+      snap => {
+        setBlocked(new Set(snap.docs.map(d => d.data().blockedId)));
+      }
+    );
+    return () => unsub();
+  }, [logged, userDoc]);
 
   /* unread counts & recency meta ─── */
   useEffect(()=>{
@@ -269,9 +292,10 @@ export default function ChatBox({
       const list = [];
       snap.docs.forEach(doc=>{
         const m = doc.data();
+        if(blocked.has(m.senderId)) return;
         if(
-          (m.senderId===userDoc.userId && m.recipientId===partnerId) ||
-          (m.senderId===partnerId   && m.recipientId===userDoc.userId)
+          (m.senderId===userDoc.userId && m.recipientId===partnerId && m.recipientName===partnerName) ||
+          (m.senderId===partnerId && m.senderName===partnerName && m.recipientId===userDoc.userId)
         ) {
           list.push({id:doc.id,...m});
           if(!m.read && m.senderId===partnerId && m.recipientId===userDoc.userId)
@@ -349,6 +373,7 @@ export default function ChatBox({
     try {
       await addDoc(collection(db,"messages"),{
         recipientId:partnerId.trim(),
+        recipientName:partnerName,
         senderName:userDoc.pseudoname,
         senderId:userDoc.userId,
         personalChat:true,
@@ -516,9 +541,11 @@ export default function ChatBox({
         <h2 className="title ">Inbox for {userDoc.userId}</h2>
         <p className="text-xs text-white/60 ">Click name to add to Waves</p>
         <div className="h-72 overflow-y-auto space-y-3 pr-1 retro-scrollbar">
-          {heatMsgs.length===0
+          {heatMsgs.filter(m=>!contacts.find(c=>c.id===m.senderId)&&!blocked.has(m.senderId)).length===0
             ? <p className="italic text-white/60">No messages</p>
-            : heatMsgs.map(m=>(
+            : heatMsgs
+                .filter(m=>!contacts.find(c=>c.id===m.senderId)&&!blocked.has(m.senderId))
+                .map(m=>(
                 <div key={m.id} className="bg-white/10 p-3 rounded text-sm space-y-1">
                   {m.senderId
                     ? (
@@ -605,7 +632,10 @@ export default function ChatBox({
     return (
       <Panel back={()=>setStep("waveList")} toast={toast}>
         <h2 className="title mb-1">{partnerName}</h2>
-         <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2 retro-scrollbar">
+         {blocked.has(partnerId) && (
+          <p className="italic mb-2">User blocked.</p>
+        )}
+        <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2 retro-scrollbar">
           {dmMsgs.map(m=>(
             <div key={m.id}
                  className={`max-w-xs px-3 py-2 rounded-lg text-sm shadow
@@ -623,6 +653,14 @@ export default function ChatBox({
             className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
           >
             Anonymous
+          </button>
+        )}
+        {!blocked.has(partnerId) && (
+          <button
+            onClick={()=>blockUserId(userDoc.userId, partnerId)}
+            className="mt-2 w-full text-sm text-red-300 hover:text-red-400"
+          >
+            Block
           </button>
         )}
       </Panel>
