@@ -1,12 +1,6 @@
-import { useState } from "react";
-
-const Navbar = () => {
-    const [open, setOpen] = useState(false);
-
-    return (
-      <>
-      </>
-    );
-};
+const Navbar = () => (
+    <>
+    </>
+);
 
 export default Navbar;
