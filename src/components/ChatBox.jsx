@@ -114,12 +114,14 @@ export default function ChatBox({
 }) {
   const [step, setStep] = useState(initialStep);
     // possible: login | register | googleInit | choose | settings | heat | waveList | waveChat
-
+  // track if we already opened the DM for a prefilled partner so that
+  // navigating back won't auto-open it again
+  const [prefillUsed, setPrefillUsed] = useState(false);
   /* auth/profile */
   const [userId, setUserId] = useState("");
   const [password, setPwd] = useState("");
   const [pseudo, setPseudo] = useState("");
-  const [userDoc, setUserDoc] = useState(null); // {uid,userId,pseudoname}
+  const [userDoc, setUserDoc] = useState(""); // {uid,userId,pseudoname}
   const logged = !!userDoc;
   const auth = getAuth();
   const provider = new GoogleAuthProvider();
@@ -144,7 +146,9 @@ export default function ChatBox({
     const saved = localStorage.getItem("waveUser");
     if (saved) {
       setUserDoc(JSON.parse(saved));
-      setStep(initialStep === "waveChat" && initialPartner ? "waveChat" : "choose");
+      const openChat = initialStep === "waveChat" && initialPartner;
+      setStep(openChat ? "waveChat" : "choose");
+      if (openChat) setPrefillUsed(true);
     } else {
       const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!firebaseUser) { setStep("login"); return; }
@@ -166,9 +170,11 @@ export default function ChatBox({
             setPartnerId(initialPartner);
             setPartnerName(initialPartner);
             setStep("waveChat");
+            setPrefillUsed(true);
           } else {
             setStep("choose");
           }
+          
         }
       });
       return ()=>unsub();
@@ -177,12 +183,13 @@ export default function ChatBox({
 
   /* If user logs in (step→choose), but we have initialPartner, immediately open DM */
   useEffect(() => {
-    if (logged && step === "choose" && initialPartner) {
-      setPartnerId(initialPartner);
-      setPartnerName(initialPartner);
-      setStep("waveChat");
-    }
-  }, [logged, step, initialPartner]);
+  if (logged && step === "choose" && initialPartner && !prefillUsed) {
+    setPartnerId(initialPartner);
+    setPartnerName(initialPartner);
+    setStep("waveChat");
+    setPrefillUsed(true);
+  }
+}, [logged, step, initialPartner, prefillUsed]);
 
   /* ─── Heat listener ─── */
   useEffect(() => {
@@ -292,9 +299,14 @@ export default function ChatBox({
     const u = { uid:null, userId:d.userId, pseudoname:d.pseudoname };
     setUserDoc(u);
     localStorage.setItem("waveUser", JSON.stringify(u));
-    // If there was an initialPartner, after setUserDoc, our useEffect will fire and switch to waveChat.
-    // Otherwise go to choose.
-    if(!initialPartner) setStep("choose");
+     if(initialPartner) {
+      setPartnerId(initialPartner);
+      setPartnerName(initialPartner);
+      setStep("waveChat");
+      setPrefillUsed(true);
+    } else {
+      setStep("choose");
+    }
   };
   const googleSignIn = ()=> signInWithPopup(auth,provider).catch(()=>pop("Google sign-in failed"));
   const logout = ()=>
@@ -322,6 +334,7 @@ export default function ChatBox({
       setPartnerId(initialPartner);
       setPartnerName(initialPartner);
       setStep("waveChat");
+      setPrefillUsed(true);
     } else {
       setStep("choose");
     }
@@ -357,16 +370,16 @@ export default function ChatBox({
   };
 
   /* ─── delete contact ─── */
-  const removePartner = async pid=>{
-    if(!window.confirm("Remove contact for both users?"))return;
-    await deleteMutual(userDoc.userId,pid);
-    setContacts(c=>c.filter(x=>x.id!==pid));
-    if(partnerId===pid){
-      setPartnerId("");
-      setDmMsgs([]);
-      setStep("waveList");
-    }
-  };
+  // const removePartner = async pid=>{
+  //   if(!window.confirm("Remove contact for both users?"))return;
+  //   await deleteMutual(userDoc.userId,pid);
+  //   setContacts(c=>c.filter(x=>x.id!==pid));
+  //   if(partnerId===pid){
+  //     setPartnerId("");
+  //     setDmMsgs([]);
+  //     setStep("waveList");
+  //   }
+  // };
 
   /* ─── settings edit ─── */
   const [newId, setNewId] = useState("");
@@ -475,8 +488,9 @@ export default function ChatBox({
           </button>
         </div>
         <div className="flex gap-4">
-          <Btn onClick={()=>setStep("waveList")}>Wave</Btn>
-          <Btn onClick={()=>setStep("heat")}>Heat</Btn>
+        <Btn onClick={()=>setStep("heat")}>Heat</Btn>
+          <Btn onClick={()=>setStep("waveList")}>Waves</Btn>
+          
         </div>
       </Panel>
     );
