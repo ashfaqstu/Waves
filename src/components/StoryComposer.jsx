@@ -6,7 +6,8 @@ export default function StoryComposer({
   backgroundSrc,
   frameSrc,
   catGifSrc,
-  downloadFilename = "wave-story.mp4",
+  duserId = null,
+  downloadFilename = "wave-story.png",
   buttonClass = "",
 }) {
   const canvasRef = useRef(null);
@@ -61,38 +62,36 @@ export default function StoryComposer({
     return () => cancelAnimationFrame(raf);
   }, [isReady, width, height]);
 
-  // Export video only
-  const handleExportVideo = async () => {
+  // Capture a single image and share with link
+  const handleShareStory = async () => {
     if (processing || !canvasRef.current) return;
     setProcessing(true);
-    const stream = canvasRef.current.captureStream(30);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/mp4' });
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: 'video/mp4' });
-      const file = new File([blob], downloadFilename, { type: 'video/mp4' });
-      // share via Web Share API
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: 'Story Video' });
-        } catch {
-          // user cancelled or error
+    const shareUrl = userId
+      ? `${window.location.origin}/?waveId=${encodeURIComponent(userId)}`
+      : window.location.href;
+
+    canvasRef.current.toBlob(async (blob) => {
+      if (!blob) { setProcessing(false); return; }
+      const file = new File([blob], downloadFilename, { type: 'image/png' });
+      const shareData = { files: [file], url: shareUrl, title: 'Wave Story' };
+
+      try {
+        if (navigator.canShare?.(shareData)) {
+          await navigator.share(shareData);
+        } else if (navigator.share) {
+          await navigator.share({ url: shareUrl, title: 'Wave Story' });
+        } else {
+          const a = document.createElement('a');
+          a.href = shareUrl;
+          a.target = '_blank';
+          a.click();
         }
-      } else {
-        // fallback: download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = downloadFilename;
-        a.click();
+      } catch {
+        // ignore
       }
       setProcessing(false);
-    };
-    recorder.start();
-    setTimeout(() => recorder.stop(), 10000);
+    }, 'image/png');
   };
-
   return (
     <div className="flex flex-col items-center gap-2">
       <video
@@ -111,14 +110,14 @@ export default function StoryComposer({
         style={{ display: 'none' }}
       />
       <button
-        onClick={handleExportVideo}
+        onClick={handleShareStory}
         disabled={!isReady || processing}
         className={`px-4 py-2 rounded-lg text-white transition ${buttonClass} ${(!isReady || processing) ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
       >
-        {processing ? 'Processing…' : isReady ? 'Export 10s Video' : 'Preparing…'}
+        {processing ? 'Processing…' : isReady ? 'Share Story' : 'Preparing…'}
       </button>
       <p className="text-xs text-white/60 text-center">
-        Generates a 10‑second MP4: background (1080×1920), centered 1:1 GIF, then frame.
+        Shares an image of the story along with your personal link.
       </p>
     </div>
   );

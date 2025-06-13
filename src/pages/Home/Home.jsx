@@ -271,6 +271,7 @@ export default function Home() {
                 backgroundSrc={spaceGif}
                 frameSrc={frameOverlay}
                 catGifSrc={cat1}
+                userId={JSON.parse(userJson).userId}
                 downloadFilename="wave-story.png"
                 buttonClass="bg-green-600 hover:bg-green-700"
               />
