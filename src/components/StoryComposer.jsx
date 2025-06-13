@@ -66,7 +66,7 @@ export default function StoryComposer({
   const handleShareStory = async () => {
     if (processing || !canvasRef.current) return;
     setProcessing(true);
-    const shareUrl = userId
+    const shareUrl = duserId
       ? `${window.location.origin}/?waveId=${encodeURIComponent(userId)}`
       : window.location.href;
 
