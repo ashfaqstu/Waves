@@ -152,7 +152,8 @@ export default function ChatBox({
   const [pseudo, setPseudo] = useState("");
   const [userDoc, setUserDoc] = useState(""); // {uid,userId,pseudoname}
   const [email, setEmail] = useState("");
-  const logged = !!userDoc;
+  // Consider the user "logged" only once we have a profile with a userId
+  const logged = !!(userDoc && userDoc.userId);
   const auth = getAuth();
   const provider = new GoogleAuthProvider();
 
