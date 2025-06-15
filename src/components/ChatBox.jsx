@@ -13,6 +13,7 @@ import {
   onAuthStateChanged, signOut
 } from "firebase/auth";
 import { db } from "../firebase";
+import StoryComposer from "./StoryComposer";
 
 /* ─────────── hooks & small helpers ─────────── */
 const useToast = () => {
@@ -154,6 +155,8 @@ export default function ChatBox({
   const [heatEnd, scrollHeat] = useScrollBottom();
   const [dmEnd,   scrollDm]   = useScrollBottom();
   const [toast,   pop]        = useToast();
+  const [shareMenu, setShareMenu] = useState(false);
+  const [showStory, setShowStory] = useState(false);
 
   // hide heat action buttons on outside click
   useEffect(() => {
@@ -559,10 +562,18 @@ export default function ChatBox({
   if(step==="choose")
     return(
       <Panel>
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 relative">
           <div className="flex items-center gap-3">
             <h2 className="title mb-0">{userDoc.pseudoname}</h2>
-            <button onClick={()=>shareProfileLink(userDoc.userId,pop)} title="Share">🔗</button>
+            <div className="relative">
+              <button onClick={e=>{e.stopPropagation();setShareMenu(s=>!s);}} title="Share">🔗</button>
+              {shareMenu && (
+                <div className="absolute left-0 mt-1 bg-black/80 text-sm rounded shadow-lg z-10">
+                  <button onClick={() => {shareProfileLink(userDoc.userId,pop);setShareMenu(false);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Share Link</button>
+                  <button onClick={() => {setShareMenu(false);setShowStory(true);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Share to Instagram</button>
+                </div>
+              )}
+            </div>
             <button onClick={openSettings} title="Settings">⚙️</button>
           </div>
           <button onClick={logout} className="text-xs underline text-pink-200">
@@ -570,10 +581,23 @@ export default function ChatBox({
           </button>
         </div>
         <div className="flex gap-4">
-        <Btn onClick={()=>setStep("heat")}>Heat</Btn>
+          <Btn onClick={()=>setStep("heat")}>Heat</Btn>
           <Btn onClick={()=>setStep("waveList")}>Waves</Btn>
-          
         </div>
+        {showStory && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-20" onClick={()=>setShowStory(false)}>
+            <div onClick={e=>e.stopPropagation()} className="bg-black p-4 rounded-lg">
+              <StoryComposer
+                backgroundSrc="/assets/bg.png"
+                frameSrc="/assets/frame.png"
+                catGifSrc="/assets/cat1.gif"
+                duserId={userDoc.userId}
+                buttonClass="bg-pink-500 hover:bg-pink-600"
+              />
+              <button className="mt-3 text-white text-sm underline" onClick={()=>setShowStory(false)}>Close</button>
+            </div>
+          </div>
+        )}
       </Panel>
     );
 
