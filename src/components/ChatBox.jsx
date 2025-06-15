@@ -125,7 +125,7 @@ export default function ChatBox({
   initialPartner = null, // if non-null, a Wave-ID to immediately open DM with
 }) {
   const [step, setStep] = useState(initialStep);
-    // possible: login | register | googleInit | choose | settings | heat | waveList | waveChat
+  // possible: login | register | googleInit | choose | settingsMenu | settingsProfile | settingsBlock | heat | waveList | waveChat
   // track if we already opened the DM for a prefilled partner so that
   // navigating back won't auto-open it again
   const [prefillUsed, setPrefillUsed] = useState(false);
@@ -399,6 +399,7 @@ export default function ChatBox({
         createdAt:serverTimestamp(),
       });
       setText("");
+      pop("Sent!");
     } catch {
       pop("Message failed");
     }
@@ -415,6 +416,7 @@ export default function ChatBox({
         createdAt   : serverTimestamp(),
       });
       setText("");
+      pop("Sent!");
     } catch {
       pop("Message failed");
     }
@@ -445,9 +447,28 @@ export default function ChatBox({
   const [newId, setNewId] = useState("");
   const [newName, setNewName] = useState("");
   const openSettings = ()=>{
+    setStep("settingsMenu");
+  };
+
+  const openProfile = ()=>{
     setNewId(userDoc.userId);
     setNewName(userDoc.pseudoname);
-    setStep("settings");
+    setStep("settingsProfile");
+  };
+
+  const openBlockList = ()=>{
+    setStep("settingsBlock");
+  };
+
+  const unblockUserId = async (blocker, blocked) => {
+    const snap = await getDocs(
+      query(
+        collection(db, "blocks"),
+        where("blockerId", "==", blocker),
+        where("blockedId", "==", blocked)
+      )
+    );
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
   };
   const saveSettings = async()=>{
     if(!newId||!newName)return pop("Fill both");
@@ -556,14 +577,46 @@ export default function ChatBox({
       </Panel>
     );
 
-  /* settings */
-  if(step==="settings")
+  /* settings menu */
+  if(step==="settingsMenu")
     return(
-      <Panel back={()=>setStep("choose")} toast={toast}>
+      <Panel back={()=>setStep("choose")}>
+        <h2 className="title mb-4">Settings</h2>
+        <div className="space-y-3">
+          <Btn onClick={openProfile}>📝 Profile</Btn>
+          <Btn onClick={openBlockList} className="bg-purple-600 hover:bg-purple-700">🚫 Block List</Btn>
+        </div>
+      </Panel>
+    );
+
+  /* settings profile */
+  if(step==="settingsProfile")
+    return(
+      <Panel back={()=>setStep("settingsMenu")} toast={toast}>
         <h2 className="title mb-4">Edit profile</h2>
         <Input ph="New Wave-ID" v={newId} s={setNewId}/>
         <Input ph="New Pseudoname" v={newName} s={setNewName} onKey={e=>e.key==="Enter"&&saveSettings()}/>
         <Btn onClick={saveSettings}>Save changes</Btn>
+      </Panel>
+    );
+
+    /* settings block list */
+  if(step==="settingsBlock")
+    return(
+      <Panel back={()=>setStep("settingsMenu")} toast={toast}>
+        <h2 className="title mb-4">Blocked users</h2>
+        {blocked.size===0 ? (
+          <p className="italic text-white/60">No blocked users</p>
+        ) : (
+          [...blocked].map(id => (
+            <div key={id} className="flex justify-between items-center mb-2">
+              <span>{id}</span>
+              <button onClick={()=>unblockUserId(userDoc.userId, id)} className="px-2 py-1 bg-red-600 rounded hover:bg-red-700 text-sm">
+                ✔ Unblock
+              </button>
+            </div>
+          ))
+        )}
       </Panel>
     );
 
