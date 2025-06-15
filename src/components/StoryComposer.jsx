@@ -70,29 +70,32 @@ export default function StoryComposer({
   }, [isReady, width, height, duserId]);
 
   const handleShareStory = async () => {
-    if (processing || !canvasRef.current) return;
-    setProcessing(true);
+  if (processing || !canvasRef.current) return;
+  setProcessing(true);
 
-    const shareUrl = duserId
-      ? `${window.location.origin}/?waveId=${encodeURIComponent(duserId)}`
-      : window.location.href;
+  canvasRef.current.toBlob(async (blob) => {
+    if (!blob) return setProcessing(false);
 
-    canvasRef.current.toBlob(async (blob) => {
-      if (!blob) return setProcessing(false);
-      
-      const urlObj = URL.createObjectURL(blob);
-      const igUrl =
-        `https://www.instagram.com/create/story/?backgroundImage=${encodeURIComponent(urlObj)}&url=${encodeURIComponent(shareUrl)}`;
+    const file = new File([blob], "wave-story.png", { type: "image/png" });
+    const shareData = {
+      files: [file],
+      title: "Wave Story",
+      text: "Wave to me on Heatwaves!",
+    };
 
-      try {
-        window.location.href = igUrl;
-      } catch {
-        // ignore 
+    try {
+      if (navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        alert("Sharing not supported on this device. Please download instead.");
       }
+    } catch (e) {
+      console.warn("Share failed:", e);
+    }
 
-      setProcessing(false);
-    }, "image/png");
-  };
+    setProcessing(false);
+  }, "image/png");
+};
 
    const handleDownload = () => {
     if (processing || !canvasRef.current) return;
