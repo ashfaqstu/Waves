@@ -61,12 +61,17 @@ export default function StoryComposer({
 
     // 3. Draw frame overlay (same 1:1 square, same size as cat)
     ctx.drawImage(frameImg.current, 0, y, size, size);
-  
-    // 4. Draw call to action text below the frame
-    ctx.font = "bold 72px sans-serif";
+  // 4. Draw site title at the top
+    ctx.font = "bold 128px 'Press Start 2P', sans-serif";
+    ctx.fillStyle = "#c084fc"; // tailwind purple-400
+    ctx.textAlign = "center";
+    ctx.fillText("WAVES", width / 2, 290);
+
+    // 5. Draw call to action text below the frame
+    ctx.font = "bold 72px 'Press Start 2P', sans-serif";
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
-    ctx.fillText(`Wave to ${duserId}`, width / 2, height - 100);
+    ctx.fillText(`Wave to ${duserId}`, width / 2, height - 250);
   }, [isReady, width, height, duserId]);
 
   const handleShareStory = async () => {

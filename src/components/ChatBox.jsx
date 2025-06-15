@@ -16,11 +16,9 @@ import { db } from "../firebase";
 import StoryComposer from "./StoryComposer";
 
 const storyImgs = [
-  "/assets/frames/1.png",  "/assets/frames/2.png",  "/assets/frames/3.png",
-  "/assets/frames/4.png",  "/assets/frames/5.png",  "/assets/frames/6.png",
-  "/assets/frames/7.png",  "/assets/frames/8.png",  "/assets/frames/square_9.png",
-  "/assets/frames/square_10.png", "/assets/frames/square_11.png",
-  "/assets/frames/square_12.png", "/assets/frames/square_13.png",
+  "/assets/cat1.gif",
+  "/assets/cat2.gif",
+  "/assets/cat.png",
 ];
 /* ─────────── hooks & small helpers ─────────── */
 const useToast = () => {
