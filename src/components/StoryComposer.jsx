@@ -6,7 +6,7 @@ export default function StoryComposer({
   backgroundSrc,
   frameSrc,
   catGifSrc,
-  duserId = null,
+    duserId = null,
   downloadFilename = "wave-story.png",
   buttonClass = "",
 }) {
@@ -67,7 +67,7 @@ export default function StoryComposer({
     if (processing || !canvasRef.current) return;
     setProcessing(true);
     const shareUrl = duserId
-      ? `${window.location.origin}/?waveId=${encodeURIComponent(userId)}`
+      ? `${window.location.origin}/?waveId=${encodeURIComponent(duserId)}`
       : window.location.href;
 
     canvasRef.current.toBlob(async (blob) => {

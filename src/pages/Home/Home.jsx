@@ -11,7 +11,6 @@ import ChatBox     from "../../components/ChatBox";
 import LyricsPanel from "../../components/LyricsPanel";
 import { lyrics }  from "../../data/lyrics";
 import { db }      from "../../firebase";
-import StoryComposer from "../../components/StoryComposer";
 
 /* ---------- static assets from /public ----------------------------- */
 const spaceGif      = "/assets/space.gif";
@@ -152,47 +151,7 @@ export default function Home() {
     }
   };
 
-  /************************************************************************
-   *  3) “Share as Story (Mobile)” logic
-   *     - Only works when Instagram is installed and assets are publicly reachable
-   *     - Uses a real <a href="…"> link for better success on iOS/Android
-   *     - Includes an Android intent fallback link for Chrome on Android
-   ************************************************************************/
-  const SITE_BASE = "https://wave-1ffd1.web.app";
-  const isMobile  = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // We’ll build these only if the user is logged in
-  let instagramLink = "";
-  let androidIntentLink = "";
-
-  const userJson = localStorage.getItem("waveUser");
-  if (userJson) {
-    const { userId: me } = JSON.parse(userJson);
-
-    // Build fully qualified URLs for each asset (must be HTTPS)
-    const bgUrl       = encodeURIComponent(`${SITE_BASE}/assets/space.gif`);
-    const sticker1Url = encodeURIComponent(`${SITE_BASE}/assets/frame.png`);
-    const sticker2Url = encodeURIComponent(`${SITE_BASE}/assets/cat1.gif`);
-    const storyLink   = encodeURIComponent(`${SITE_BASE}/?waveId=${me}`);
-
-    // instagram-stories:// deep link
-    instagramLink =
-      `instagram-stories://share?` +
-      `backgroundImage=${bgUrl}` +
-      `&stickerImage=${sticker1Url}` +
-      `&stickerImage=${sticker2Url}` +
-      `&attributionURL=${storyLink}`;
-
-    // Android intent fallback
-    androidIntentLink =
-      `intent://share?` +
-      `backgroundImage=${bgUrl}` +
-      `&stickerImage=${sticker1Url}` +
-      `&stickerImage=${sticker2Url}` +
-      `&attributionURL=${storyLink}` +
-      `#Intent;package=com.instagram.android;scheme=instagram-stories;end;`;
-  }
-
+  
   /************************************************************************
    *  4) “Cancel” handler → remove ?waveId and reset everything
    ************************************************************************/
@@ -216,20 +175,25 @@ export default function Home() {
       <main className="relative flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-16 px-4 py-8 min-h-screen text-white">
 
         {/* ─── Left column: rotating frames / fallback ─── */}
-        <div className="relative w-full sm:w-1/2 max-w-sm">
-          <img
-            src={frameImg || fallback}
-            className="w-full object-contain"
-            style={{ imageRendering: "pixelated" }}
-            alt=""
-          />
-          <img
-            src={frameOverlay}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ imageRendering: "pixelated" }}
-            alt=""
-          />
-        </div>
+        <div className="relative w-full sm:w-1/2 max-w-sm aspect-square overflow-hidden">
+  {/* Scaled and centered image */}
+  <img
+    src={frameImg || fallback}
+    className="absolute top-1/2 left-1/2 w-[92%] h-[92%] object-contain translate-x-[-50%] translate-y-[-50%]"
+    style={{ imageRendering: "pixelated" }}
+    alt=""
+  />
+
+  {/* Overlay frame (square, fixed) */}
+  <img
+    src={frameOverlay}
+    className="absolute inset-0 w-full h-full pointer-events-none"
+    style={{ imageRendering: "pixelated" }}
+    alt=""
+  />
+</div>
+
+
 
         {/* ─── Right column: lyrics, share button, chat ─── */}
         <div className="w-full sm:w-1/2 max-w-sm flex flex-col items-center sm:items-start">
@@ -239,44 +203,7 @@ export default function Home() {
             toggle={togglePlay}
           />
 
-          {/* ─── “Share as Story” on Mobile ─── */}
-          {userJson && isMobile && (
-            <div className="mt-4 flex flex-col items-center gap-2">
-              {/* 1) Primary deep-link for iOS/Android */}
-              <a
-                href={instagramLink}
-                className="px-5 py-2 bg-indigo-500 text-white rounded-full hover:bg-indigo-600 transition"
-                style={{ textDecoration: "none" }}
-              >
-                Share as Story (Tap Here)
-              </a>
-
-              {/* 2) Android Intent fallback */}
-              <a
-                href={androidIntentLink}
-                className="px-5 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
-                style={{ textDecoration: "none" }}
-              >
-                Android Intent Fallback
-              </a>
-            </div>
-          )}
-
-          {/* ─── “Download Story Image” on Desktop ─── */}
-          {userJson && !isMobile && (
-            <div className="w-full mt-4">
-              <StoryComposer
-                width={1080}
-                height={1920}
-                backgroundSrc={spaceGif}
-                frameSrc={frameOverlay}
-                catGifSrc={cat1}
-                userId={JSON.parse(userJson).userId}
-                downloadFilename="wave-story.png"
-                buttonClass="bg-green-600 hover:bg-green-700"
-              />
-            </div>
-          )}
+          {/* Share buttons removed */}
 
            {/* ─── "Open Chat" toggle (only if no ?waveId) ─── */}
           {!prefilledWaveId && (

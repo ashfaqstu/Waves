@@ -72,6 +72,15 @@ const blockUserId = async (blocker, blocked) => {
   await deleteMutual(blocker, blocked).catch(() => {});
 };
 
+const shareProfileLink = (id, toast) => {
+  const url = `${window.location.origin}/?waveId=${encodeURIComponent(id)}`;
+  if (navigator.share) {
+    navigator.share({ url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => toast && toast("Link copied"));
+  }
+};
+
 /* ─────────── tiny UI atoms ─────────── */
 const Panel = ({ back, toast, children }) => (
   <div className="relative w-full rounded-xl bg-white/10 backdrop-blur-md
@@ -149,10 +158,19 @@ export default function ChatBox({
   const [newWaveId, setNewWaveId] = useState("");
   const [search, setSearch] = useState("");
   const [blocked, setBlocked] = useState(new Set());
+  const [activeHeat, setActiveHeat] = useState(null); // id of heat msg showing actions
 
   const [heatEnd, scrollHeat] = useScrollBottom();
   const [dmEnd,   scrollDm]   = useScrollBottom();
   const [toast,   pop]        = useToast();
+
+  // hide heat action buttons on outside click
+  useEffect(() => {
+    if (!activeHeat) return;
+    const handler = () => setActiveHeat(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [activeHeat]);
 
   /* ─── boot: restore local session OR observe Firebase auth ─── */
   useEffect(() => {
@@ -371,12 +389,20 @@ export default function ChatBox({
   const sendDm = async()=>{
     if(!partnerId.trim()||!text.trim())return;
     try {
+      const otherSnap = await getDocs(
+        query(
+          collection(db, "contacts"),
+          where("ownerId", "==", partnerId.trim()),
+          where("partnerId", "==", userDoc.userId)
+        )
+      );
+      const personal = !otherSnap.empty;
       await addDoc(collection(db,"messages"),{
         recipientId:partnerId.trim(),
         recipientName:partnerName,
         senderName:userDoc.pseudoname,
         senderId:userDoc.userId,
-        personalChat:true,
+        personalChat:personal,
         text,
         read:false,
         createdAt:serverTimestamp(),
@@ -509,6 +535,7 @@ export default function ChatBox({
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <h2 className="title mb-0">{userDoc.pseudoname}</h2>
+            <button onClick={()=>shareProfileLink(userDoc.userId,pop)} title="Share">🔗</button>
             <button onClick={openSettings} title="Settings">⚙️</button>
           </div>
           <button onClick={logout} className="text-xs underline text-pink-200">
@@ -546,22 +573,40 @@ export default function ChatBox({
             : heatMsgs
                 .filter(m=>!contacts.find(c=>c.id===m.senderId)&&!blocked.has(m.senderId))
                 .map(m=>(
-                <div key={m.id} className="bg-white/10 p-3 rounded text-sm space-y-1">
+                <div key={m.id} className="bg-white/10 p-3 rounded text-sm space-y-1 relative">
                   {m.senderId
                     ? (
                       <span
-                        onClick={()=>saveMutual(userDoc.userId,m.senderId,userDoc.pseudoname,m.senderName)}
+                        onClick={e=>{e.stopPropagation();setActiveHeat(m.id);}}
+                        onMouseEnter={()=>setActiveHeat(m.id)}
                         className="font-semibold text-purple-300 cursor-pointer hover:text-yellow-200 hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.9)]">
                         {m.senderName}
                       </span>
                     )
                     : (
-                      <span className="font-semibold text-red-300">
+                      <span
+                        onClick={e=>{e.stopPropagation();setActiveHeat(m.id);}}
+                        onMouseEnter={()=>setActiveHeat(m.id)}
+                        className="font-semibold text-red-300 cursor-pointer">
                         {m.senderName}
                       </span>
                     )
                   }
                   <span>: {m.text}</span>
+                  {activeHeat===m.id && (
+                    <div className="absolute top-full mt-1 left-0 flex gap-2 z-10">
+                      {m.senderId && (
+                        <button
+                          onClick={e=>{e.stopPropagation();saveMutual(userDoc.userId,m.senderId,userDoc.pseudoname,m.senderName);setActiveHeat(null);}}
+                          className="px-2 py-1 text-xs bg-green-600 rounded hover:bg-green-700"
+                        >Add</button>
+                      )}
+                      <button
+                        onClick={e=>{e.stopPropagation();blockUserId(userDoc.userId,m.senderId||'anon');setActiveHeat(null);}}
+                        className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700"
+                      >Block</button>
+                    </div>
+                  )}
                 </div>
               ))
           }
@@ -636,13 +681,17 @@ export default function ChatBox({
           <p className="italic mb-2">User blocked.</p>
         )}
         <div className="h-56 overflow-y-auto space-y-2 pr-1 mt-2 retro-scrollbar">
-          {dmMsgs.map(m=>(
-            <div key={m.id}
-                 className={`max-w-xs px-3 py-2 rounded-lg text-sm shadow
-                             ${m.senderId===userDoc.userId ? "bg-pink-500 self-end" : "bg-white/10"}`}>
-              {m.text}
-            </div>
-          ))}
+          {dmMsgs.map((m,i)=>{
+            const prev = dmMsgs[i-1];
+            const extraGap = i>0 && prev.senderId!==m.senderId ? 'mt-3' : '';
+            return (
+              <div key={m.id}
+                   className={`max-w-xs px-3 py-2 rounded-lg text-sm shadow ${extraGap} ${m.senderId===userDoc.userId ? "bg-pink-500 self-end" : "bg-white/10"}`}
+              >
+                {m.text}
+              </div>
+            );
+          })}
           <div ref={dmEnd}/>
         </div>
         <Textarea v={text} s={setText} onKeyDown={onMsgKey}/>
