@@ -1,14 +1,5 @@
 // src/components/ChatBox.jsx
 /*  ChatBox.jsx
-    ────────────────────────────────────────────────────────────────
-    • Now accepts `initialStep` (defaults to "login") and
-      `initialPartner` (waveId from the query param), so that
-      after login or if already logged in, it will open DM with that partner.
-    • Now accepts `initialStep` (defaults to "login"),
-      `initialPartner` (waveId from the query param), and an optional
-      `onAnon` callback. When provided, `onAnon(id)` is called with the
-      recipient ID to open the anonymous send form in the parent.
-    • Everything else (heat, waveList, waveChat, settings) remains.
 */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -132,7 +123,6 @@ const Textarea = ({ v, s, onKeyDown }) => (
 export default function ChatBox({
   initialStep = "login",
   initialPartner = null, // if non-null, a Wave-ID to immediately open DM with
-  onAnon = null,
 }) {
   const [step, setStep] = useState(initialStep);
     // possible: login | register | googleInit | choose | settings | heat | waveList | waveChat
@@ -413,15 +403,30 @@ export default function ChatBox({
       pop("Message failed");
     }
   };
-
+  const sendAnonDm = async()=>{
+    if(!partnerId.trim()||!text.trim())return;
+    try {
+      await addDoc(collection(db,"messages"),{
+        recipientId : partnerId.trim(),
+        senderName  : "Anonymous",
+        senderId    : "",
+        personalChat: false,
+        text,
+        createdAt   : serverTimestamp(),
+      });
+      setText("");
+    } catch {
+      pop("Message failed");
+    }
+  };
   /* ─── start Wave by ID ─── */
   const startWaveById = ()=>{
     const id = newWaveId.trim();
     if(!id) return;
     setNewWaveId("");
-    if(onAnon){
-      onAnon(id);
-    }
+    setPartnerId(id);
+    setPartnerName(id);
+    setStep("waveChat");
   };
 
   /* ─── delete contact ─── */
@@ -696,8 +701,10 @@ export default function ChatBox({
           <div ref={dmEnd}/>
         </div>
         <Textarea v={text} s={setText} onKeyDown={onMsgKey}/>
-        <Btn onClick={sendDm}>Send</Btn>
-        {/* Removed anonymous button inside chat */}
+        <div className="flex gap-2">
+          <Btn onClick={sendDm} className="flex-1">Send</Btn>
+          <Btn onClick={sendAnonDm} className="flex-1 bg-white/20 hover:bg-white/30 text-black">Anonymous</Btn>
+        </div>
         {!blocked.has(partnerId) && (
           <button
             onClick={()=>blockUserId(userDoc.userId, partnerId)}

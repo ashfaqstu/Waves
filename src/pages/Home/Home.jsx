@@ -292,10 +292,6 @@ export default function Home() {
                   <ChatBox
                     initialStep="heat"
                     initialPartner={prefilledWaveId}
-                    onAnon={id => {
-                      setAnonId(id);
-                      setChatMode("anon");
-                    }}
                   />
                 </div>
               )}
