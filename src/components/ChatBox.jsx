@@ -608,7 +608,7 @@ export default function ChatBox({
               <button onClick={e=>{e.stopPropagation();setShareMenu(s=>!s);}} title="Share">🔗</button>
               {shareMenu && (
                 <div className="absolute left-0 mt-1 bg-black/80 text-sm rounded shadow-lg z-10">
-                  <button onClick={() => {shareProfileLink(userDoc.userId,pop);setShareMenu(false);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Share Link</button>
+                  <button onClick={() => {shareProfileLink(userDoc.userId,pop);setShareMenu(false);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Link</button>
                   <button
                     onClick={() => {
                       setShareMenu(false);
@@ -616,7 +616,7 @@ export default function ChatBox({
                       setShowStory(true);
                     }}
                     className="block px-3 py-1 w-full text-left hover:bg-white/20"
-                  >Share to Instagram</button>
+                  >Share</button>
                 </div>
               )}
             </div>
