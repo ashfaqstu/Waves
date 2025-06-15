@@ -1,4 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
+function wrapText(ctx, text, cx, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line   = "";
+
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, cx, y);
+      line = w;
+      y   += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line, cx, y);  // final line
+}
 
 export default function StoryComposer({
   width = 1080,
@@ -8,6 +24,7 @@ export default function StoryComposer({
   catGifSrc, // now just a static image
   duserId = null,
   buttonClass = "",
+  message = null,
 }) {
   const canvasRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
@@ -34,17 +51,20 @@ export default function StoryComposer({
   }, [backgroundSrc, frameSrc, catGifSrc]);
 
   useEffect(() => {
-    if (!isReady || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+  if (!isReady || !canvasRef.current) return;
 
-    ctx.clearRect(0, 0, width, height);
+  const canvas = canvasRef.current;
+  const ctx    = canvas.getContext("2d");
 
-    // 1. Draw background cropped to story ratio (1080x1920)
-    const bg = bgImg.current;
-    const bgRatio = bg.width / bg.height;
-    const canvasRatio = width / height;
+  ctx.clearRect(0, 0, width, height);
+
+  /* ---------- 1. BACKGROUND CROPPED TO 1080×1920 ---------- */
+  {
+    const bg           = bgImg.current;
+    const bgRatio      = bg.width / bg.height;
+    const canvasRatio  = width / height;
     let sx = 0, sy = 0, sw = bg.width, sh = bg.height;
+
     if (bgRatio > canvasRatio) {
       sw = sh * canvasRatio;
       sx = (bg.width - sw) / 2;
@@ -53,53 +73,72 @@ export default function StoryComposer({
       sy = (bg.height - sh) / 2;
     }
     ctx.drawImage(bg, sx, sy, sw, sh, 0, 0, width, height);
+  }
 
-    // 2. Draw cat image (1:1 square, centered)
-    const size = width;
-    const y = (height - size) / 2;
-    ctx.drawImage(catImg.current, width/2-size/3, y, size/1.5, size/1.5);
+  /* ---------- 2. CAT IMAGE or MESSAGE IN 1:1 SQUARE ---------- */
+  const squareSide = width / 1.5;              // 720 if width = 1080
+  const squareX    = width / 2 - squareSide / 2;
+  const squareY    = (height - squareSide) / 2;
 
-    // 3. Draw frame overlay (same 1:1 square, same size as cat)
-    ctx.drawImage(frameImg.current, width/2-size/3, y, size/1.5, size/1.5);
-  // 4. Draw site title at the top
-    ctx.font = "bold 128px 'Press Start 2P', sans-serif";
-    ctx.fillStyle = "#c084fc"; // tailwind purple-400
-    ctx.textAlign = "center";
-    ctx.fillText("WAVES", width / 2, 290);
+  if (!message) {
+    ctx.drawImage(catImg.current, squareX, squareY, squareSide, squareSide);
+  } else {
+    // black box behind the text
+    ctx.fillStyle = "black";
+    ctx.fillRect(squareX, squareY, squareSide, squareSide);
 
-    // Draw decorative border rectangle
-    ctx.strokeStyle = "#c084fc"; // Matching title color (purple)
-    ctx.lineWidth = 8;
-    ctx.strokeRect(width/2-size/3-60, height - 600, size/1.5+100, 200); // x, y, width, height
+    // wrapped text
+    ctx.fillStyle   = "purple";                // fixed typo ("purples")
+    ctx.font        = "20px 'Press Start 2P', sans-serif";
+    ctx.textAlign   = "center";
+    ctx.textBaseline = "top";
 
-    // 5. Draw call to action text below the frame
-    ctx.font = "bold 60px 'Press Start 2P', sans-serif";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.fillText(`Wave to "${duserId}"`, width / 2, height - 500);
+    const padding    = 20;
+    const maxW       = squareSide - padding * 2;
+    const lineHeight = 28;                     // 20-px font ≈ 28-px LH
+    const startY     = squareY + padding;
 
+    wrapText(ctx, message, width / 2, startY, maxW, lineHeight);
+  }
 
-    // Add black background for URL text
-    const urlText = `heatnwaves.netlify.app`;
-    ctx.font = "bold 34px 'Press Start 2P', sans-serif";
-    const textMetrics = ctx.measureText(urlText);
-    const textWidth = textMetrics.width;
-    
-    // Draw black background rectangle
-    const padding = 20;
-    ctx.fillStyle = "purple";
-    ctx.fillRect(
-      width / 2 - textWidth / 2 - padding,
-      height - 470, // Position slightly higher than text
-      textWidth + padding * 2-10,
-      63 // Height of background
-    );
-    
-    // Draw text on top
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.fillText(urlText, width / 2, height - 420);
-  }, [isReady, width, height, duserId]);
+  /* ---------- 3. FRAME OVERLAY ---------- */
+  ctx.drawImage(frameImg.current, squareX, squareY, squareSide, squareSide);
+
+  /* ---------- 4. “WAVES” TITLE + BORDER ---------- */
+  ctx.font        = "bold 128px 'Press Start 2P', sans-serif";
+  ctx.fillStyle   = "#c084fc";
+  ctx.textAlign   = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("WAVES", width / 2, 290);
+
+  ctx.strokeStyle = "#c084fc";
+  ctx.lineWidth   = 8;
+  ctx.strokeRect(squareX - 60, height - 600, squareSide + 100, 200);
+
+  /* ---------- 5. CALL-TO-ACTION ---------- */
+  ctx.font      = "bold 60px 'Press Start 2P', sans-serif";
+  ctx.fillStyle = "white";
+  ctx.fillText(`Wave to "${duserId}"`, width / 2, height - 500);
+
+  /* ---------- 6. URL BADGE ---------- */
+  const urlText   = "heatnwaves.netlify.app";
+  ctx.font        = "bold 34px 'Press Start 2P', sans-serif";
+
+  const urlW      = ctx.measureText(urlText).width;
+  const urlPad    = 20;
+
+  ctx.fillStyle = "black";
+  ctx.fillRect(
+    width / 2 - urlW / 2 - urlPad,
+    height - 470,
+    urlW + urlPad * 2,
+    63
+  );
+
+  ctx.fillStyle = "white";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(urlText, width / 2, height - 420);
+}, [isReady, width, height, duserId, message]);
 
   const handleShareStory = async () => {
   if (processing || !canvasRef.current) return;
@@ -112,7 +151,7 @@ export default function StoryComposer({
     const shareData = {
       files: [file],
       title: "Wave Story",
-      text: "Wave to me on Heatwaves!",
+      text: message || "Wave to me on Heatwaves!",
     };
 
     try {

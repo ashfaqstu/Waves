@@ -177,6 +177,8 @@ export default function ChatBox({
   const [shareMenu, setShareMenu] = useState(false);
   const [showStory, setShowStory] = useState(false);
   const [randomStoryImg, setRandomStoryImg] = useState(storyImgs[0]);
+  const [showHeatStory, setShowHeatStory] = useState(false);
+  const [storyMessage, setStoryMessage] = useState("");
 
   // hide heat action buttons on outside click
   useEffect(() => {
@@ -766,6 +768,10 @@ export default function ChatBox({
                         >Add</button>
                       )}
                       <button
+                        onClick={e=>{e.stopPropagation();setStoryMessage(m.text);setShowHeatStory(true);setActiveHeat(null);}}
+                        className="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700"
+                      >Share</button>
+                      <button
                          onClick={e=>{e.stopPropagation();blockUserId(userDoc.userId,m.senderId||'anon', m.senderName);setActiveHeat(null);}}
                         className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700"
                       >Block</button>
@@ -776,6 +782,21 @@ export default function ChatBox({
           }
           <div ref={heatEnd}/>
         </div>
+        {showHeatStory && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-20" onClick={()=>setShowHeatStory(false)}>
+            <div onClick={e=>e.stopPropagation()} className="bg-black p-4 rounded-lg">
+              <StoryComposer
+                backgroundSrc="/assets/space.gif"
+                frameSrc="/assets/frame.png"
+                catGifSrc="/assets/cat1.gif"
+                message={storyMessage}
+                duserId={userDoc.userId}
+                buttonClass="bg-pink-500 hover:bg-pink-600"
+              />
+              <button className="mt-3 text-white text-sm underline" onClick={()=>setShowHeatStory(false)}>Close</button>
+            </div>
+          </div>
+        )}
       </Panel>
     );
 
