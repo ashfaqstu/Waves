@@ -175,7 +175,7 @@ export default function Home() {
       <main className="relative flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-16 px-4 py-8 min-h-screen text-white">
 
         {/* ─── Left column: rotating frames / fallback ─── */}
-        <div className="relative w-full sm:w-1/2 max-w-sm aspect-square overflow-hidden">
+        <div className="relative w-full sm:w-1/2 max-w-xs sm:max-w-sm aspect-square overflow-hidden">
   {/* Scaled and centered image */}
   <img
     src={frameImg || fallback}
@@ -252,13 +252,21 @@ export default function Home() {
                       <p className="text-green-300 text-sm">{anonToast}</p>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Recipient ID"
-                    value={anonId}
-                    onChange={e => setAnonId(e.target.value)}
-                    className="w-full p-2 mb-3 rounded text-black backdrop-blur-sm bg-white/30"
-                  />
+                  <div className="flex items-center mb-3">
+                    <button
+                      onClick={() => setChatMode("chat")}
+                      className="px-2 py-1 mr-2 bg-white/30 backdrop-blur-sm text-black rounded"
+                    >
+                      ←
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="Recipient ID"
+                      value={anonId}
+                      onChange={e => setAnonId(e.target.value)}
+                      className="flex-1 p-2 rounded text-black backdrop-blur-sm bg-white/30"
+                    />
+                  </div>
                   <textarea
                     rows={3}
                     placeholder="Message"
@@ -284,7 +292,10 @@ export default function Home() {
                   <ChatBox
                     initialStep="heat"
                     initialPartner={prefilledWaveId}
-                    onAnon={() => setChatMode("anon")}
+                    onAnon={id => {
+                      setAnonId(id);
+                      setChatMode("anon");
+                    }}
                   />
                 </div>
               )}
@@ -293,7 +304,7 @@ export default function Home() {
         </div>
 
         {/* Animated site title */}
-        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
+        <div className="fixed left-1/2 -translate-x-1/2 top-3 sm:top-auto sm:bottom-3 pointer-events-none">
           <WavyTitle />
         </div>
 

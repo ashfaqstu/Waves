@@ -6,7 +6,8 @@
       after login or if already logged in, it will open DM with that partner.
     • Now accepts `initialStep` (defaults to "login"),
       `initialPartner` (waveId from the query param), and an optional
-      `onAnon` callback to switch to the anonymous form in the parent.
+      `onAnon` callback. When provided, `onAnon(id)` is called with the
+      recipient ID to open the anonymous send form in the parent.
     • Everything else (heat, waveList, waveChat, settings) remains.
 */
 
@@ -417,10 +418,10 @@ export default function ChatBox({
   const startWaveById = ()=>{
     const id = newWaveId.trim();
     if(!id) return;
-    setPartnerId(id);
-    setPartnerName(id);
-    setStep("waveChat");
     setNewWaveId("");
+    if(onAnon){
+      onAnon(id);
+    }
   };
 
   /* ─── delete contact ─── */
@@ -696,14 +697,7 @@ export default function ChatBox({
         </div>
         <Textarea v={text} s={setText} onKeyDown={onMsgKey}/>
         <Btn onClick={sendDm}>Send</Btn>
-        {onAnon && (
-          <button
-            onClick={onAnon}
-            className="mt-3 w-full text-sm text-white/80 hover:text-white transition"
-          >
-            Anonymous
-          </button>
-        )}
+        {/* Removed anonymous button inside chat */}
         {!blocked.has(partnerId) && (
           <button
             onClick={()=>blockUserId(userDoc.userId, partnerId)}
