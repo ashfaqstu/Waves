@@ -141,8 +141,9 @@ export default function ChatBox({
   initialPartner = null, // if non-null, a Wave-ID to immediately open DM with
 }) {
   const [step, setStep] = useState(initialStep);
-  // possible: login | register | googleInit | choose | settingsMenu | settingsProfile | settingsBlock | heat | waveList | waveChat
-  // track if we already opened the DM for a prefilled partner so that
+  // possible: login | register | googleInit | forgot | choose | settingsMenu |
+  //   settingsProfile | settingsBlock | heat | waveList | waveChat
+
   // navigating back won't auto-open it again
   const [prefillUsed, setPrefillUsed] = useState(false);
   /* auth/profile */
@@ -150,6 +151,7 @@ export default function ChatBox({
   const [password, setPwd] = useState("");
   const [pseudo, setPseudo] = useState("");
   const [userDoc, setUserDoc] = useState(""); // {uid,userId,pseudoname}
+  const [email, setEmail] = useState("");
   const logged = !!userDoc;
   const auth = getAuth();
   const provider = new GoogleAuthProvider();
@@ -199,12 +201,13 @@ export default function ChatBox({
           query(collection(db,"users"), where("uid","==",firebaseUser.uid))
         );
         if (snap.empty) {
-          // first google login → ask for id + pseudo
-          setUserDoc({ uid: firebaseUser.uid });   // temporarily store uid
+          // first google login → ask for id + pseudo + password
+          setUserDoc({ uid: firebaseUser.uid, email: firebaseUser.email });
+          setEmail(firebaseUser.email);
           setStep("googleInit");
         } else {
           const data = snap.docs[0].data();
-          const u = { uid: data.uid, userId: data.userId, pseudoname: data.pseudoname };
+          const u = { uid: data.uid, userId: data.userId, pseudoname: data.pseudoname, email: data.email };
           setUserDoc(u);
           localStorage.setItem("waveUser", JSON.stringify(u));
           // If we have an initialPartner provided, jump straight into waveChat:
@@ -346,19 +349,24 @@ export default function ChatBox({
 
   /* ─── auth helpers ─── */
   const register = async()=>{
-    if(!userId||!password||!pseudo) return pop("Fill all fields");
-    const dup = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
-    if(!dup.empty) return pop("ID exists");
+  if(!userId||!email||!password||!pseudo) return pop("Fill all fields");
+    const dupId = await getDocs(query(collection(db,"users"), where("userId","==",userId)));
+    if(!dupId.empty) return pop("ID exists");
+    const dupMail = await getDocs(query(collection(db,"users"), where("email","==",email)));
+    if(!dupMail.empty) return pop("Email exists");
+    await addDoc(collection(db,"users"),{userId,email,password,pseudoname:pseudo});
     await addDoc(collection(db,"users"),{userId,password,pseudoname:pseudo});
     pop("Account created"); setStep("login");
   };
   const manualLogin = async()=>{
     if(!userId||!password) return pop("Enter credentials");
-    const snap = await getDocs(query(collection(db,"users"),where("userId","==",userId)));
-    if(snap.empty) return pop("ID not found");
+    let snap = await getDocs(query(collection(db,"users"),where("userId","==",userId)));
+    if(snap.empty && userId.includes("@"))
+      snap = await getDocs(query(collection(db,"users"),where("email","==",userId)));
+    if(snap.empty) return pop("ID/mail not found");
     const d = snap.docs[0].data();
     if(d.password!==password) return pop("Wrong password");
-    const u = { uid:null, userId:d.userId, pseudoname:d.pseudoname };
+    const u = { uid:d.uid||null, userId:d.userId, pseudoname:d.pseudoname, email:d.email };
     setUserDoc(u);
     localStorage.setItem("waveUser", JSON.stringify(u));
      if(initialPartner) {
@@ -370,6 +378,13 @@ export default function ChatBox({
       setStep("choose");
     }
   };
+  const recoverPwd = async()=>{
+    if(!email) return pop("Enter email");
+    const snap = await getDocs(query(collection(db,"users"),where("email","==",email)));
+    if(snap.empty) return pop("Email not found");
+    const data = snap.docs[0].data();
+    pop(`Password: ${data.password}`);
+  };
   const googleSignIn = ()=> signInWithPopup(auth,provider).catch(()=>pop("Google sign-in failed"));
   const logout = ()=>
     signOut(auth)
@@ -380,15 +395,17 @@ export default function ChatBox({
         setStep("login");
       });
   const saveGoogleInit = async()=>{
-    if(!userId||!pseudo) return pop("Fill both");
+   if(!userId||!password||!pseudo) return pop("Fill all fields");
     const dup = await getDocs(query(collection(db,"users"),where("userId","==",userId)));
     if(!dup.empty) return pop("ID exists");
     await addDoc(collection(db,"users"), {
       uid: auth.currentUser.uid,
+      email: auth.currentUser.email,
       userId,
-      pseudoname: pseudo
+      pseudoname: pseudo,
+      password,
     });
-    const u = { uid: auth.currentUser.uid, userId, pseudoname: pseudo };
+     const u = { uid: auth.currentUser.uid, userId, pseudoname: pseudo, email: auth.currentUser.email };
     setUserDoc(u);
     localStorage.setItem("waveUser", JSON.stringify(u));
     // If initialPartner present, go straight to waveChat
@@ -546,6 +563,7 @@ export default function ChatBox({
   const onLoginEnter = e => e.key === "Enter" && manualLogin();
   const onRegEnter   = e => e.key === "Enter" && register();
   const onGoEnter    = e => e.key === "Enter" && saveGoogleInit();
+  const onForgotEnter= e => e.key === "Enter" && recoverPwd();
   const onMsgKey     = e => { if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendDm(); } };
 
   /* ─── search + sort ─── */
@@ -562,14 +580,15 @@ export default function ChatBox({
     return (
       <Panel toast={toast}>
         <h2 className="title mb-4">Login</h2>
-        <Input ph="User ID" v={userId} s={setUserId}/>
+        <Input ph="User ID or Email" v={userId} s={setUserId}/>
         <Input ph="Password" v={password} s={setPwd} pw onKey={onLoginEnter}/>
         <Btn onClick={manualLogin}>Login</Btn>
         <Btn className="mt-3 bg-purple-600 hover:bg-purple-700" onClick={googleSignIn}>
           Login&nbsp;with&nbsp;Google
         </Btn>
+        <p className="link mt-3" onClick={()=>setStep("forgot")}>Forgot password?</p>
         <p className="link mt-3" onClick={()=>setStep("register")}>
-          Need an account? Register
+          Register
         </p>
       </Panel>
     );
@@ -580,6 +599,7 @@ export default function ChatBox({
       <Panel back={()=>setStep("login")} toast={toast}>
         <h2 className="title mb-4">Create account</h2>
         <Input ph="User ID" v={userId} s={setUserId}/>
+        <Input ph="Email" v={email} s={setEmail}/>
         <Input ph="Password" v={password} s={setPwd} pw onKey={onRegEnter}/>
         <Input ph="Pseudoname" v={pseudo} s={setPseudo}/>
         <Btn onClick={register}>Register</Btn>
@@ -592,11 +612,22 @@ export default function ChatBox({
       <Panel toast={toast}>
         <h2 className="title mb-4">Set up your Wave profile</h2>
         <Input ph="Wave ID" v={userId} s={setUserId} onKey={onGoEnter}/>
+        <Input ph="Password" v={password} s={setPwd} pw />
         <Input ph="Pseudoname" v={pseudo} s={setPseudo}/>
         <Btn onClick={saveGoogleInit}>Save</Btn>
       </Panel>
     );
 
+    /* forgot password */
+  if(step==="forgot")
+    return(
+      <Panel back={()=>setStep("login")} toast={toast}>
+        <h2 className="title mb-4">Recover password</h2>
+        <Input ph="Email" v={email} s={setEmail} onKey={onForgotEnter}/>
+        <Btn onClick={recoverPwd}>Recover</Btn>
+      </Panel>
+    );
+    
   /* choose role */
   if(step==="choose")
     return(
