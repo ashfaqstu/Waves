@@ -17,6 +17,11 @@
   /* feel free to tint it:  color: #f4d; */
 }
 
+/* Default duration for the wave text animation */
+:root {
+  --wave-duration: 4s;
+}
+
 /* Wave animation */
 @keyframes wave {
   0%, 100% {
@@ -34,7 +39,10 @@
 }
 
 .animate-wave {
-  animation: wave 4s ease-in-out infinite;
+  animation-name: wave;
+  animation-duration: var(--wave-duration, 4s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 @keyframes pop {
   0% {

@@ -3,6 +3,8 @@ import CatAnimation from "./CatAnimation";
 
 // Control the speed of the cat animation (ms per frame)
 export const CAT_ANIM_SPEED = 100;
+// Duration (in seconds) that each wave letter animation runs
+export const WAVE_ANIM_DURATION = 4;
 export default function WavyTitle() {
   const [animTrigger, setAnimTrigger] = useState(0);
   const audioRef = useRef(null);
@@ -24,7 +26,10 @@ export default function WavyTitle() {
           <span
             key={idx}
             className="inline-block animate-wave"
-            style={{ animationDelay: `${idx * 0.15}s` }}
+            style={{
+              animationDelay: `${idx * 0.15}s`,
+              animationDuration: `${WAVE_ANIM_DURATION}s`,
+            }}
           >
             {letter}
           </span>
@@ -33,9 +38,8 @@ export default function WavyTitle() {
       {/* Positioning: on desktop the animation sits above the text,
           on mobile it appears below. Adjust `top`/`bottom` and
           width/height in CatAnimation to change size and placement. */}
-      <div className="sm:bottom-full sm:mb-2 top-full mt-2 absolute left-1/2 -translate-x-1/2">
-        <CatAnimation trigger={animTrigger} speed={CAT_ANIM_SPEED} />
-      </div>
+      <CatAnimation trigger={animTrigger} speed={CAT_ANIM_SPEED} />
+
     </div>
   );
 }
