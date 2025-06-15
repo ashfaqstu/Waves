@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 const CAT_FRAMES   = { 1:10, 2:8, 3:5, 4:8, 5:5, 6:15, 7:8 };
 const LOOP_FOLDERS = [1,2,4,7,3,5];
 
-export default function CatAnimation({ trigger, speed = 100, duration = 3000 }) {
+export default function CatAnimation({ trigger, speed = 500, duration = 3000 }) {
   const [frames, setFrames]   = useState([]);
   const [idx,    setIdx]      = useState(0);
   const [playing,setPlaying]  = useState(false);
