@@ -15,6 +15,13 @@ import {
 import { db } from "../firebase";
 import StoryComposer from "./StoryComposer";
 
+const storyImgs = [
+  "/assets/frames/1.png",  "/assets/frames/2.png",  "/assets/frames/3.png",
+  "/assets/frames/4.png",  "/assets/frames/5.png",  "/assets/frames/6.png",
+  "/assets/frames/7.png",  "/assets/frames/8.png",  "/assets/frames/square_9.png",
+  "/assets/frames/square_10.png", "/assets/frames/square_11.png",
+  "/assets/frames/square_12.png", "/assets/frames/square_13.png",
+];
 /* ─────────── hooks & small helpers ─────────── */
 const useToast = () => {
   const [msg, setMsg] = useState("");
@@ -157,6 +164,7 @@ export default function ChatBox({
   const [toast,   pop]        = useToast();
   const [shareMenu, setShareMenu] = useState(false);
   const [showStory, setShowStory] = useState(false);
+  const [randomStoryImg, setRandomStoryImg] = useState(storyImgs[0]);
 
   // hide heat action buttons on outside click
   useEffect(() => {
@@ -570,7 +578,14 @@ export default function ChatBox({
               {shareMenu && (
                 <div className="absolute left-0 mt-1 bg-black/80 text-sm rounded shadow-lg z-10">
                   <button onClick={() => {shareProfileLink(userDoc.userId,pop);setShareMenu(false);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Share Link</button>
-                  <button onClick={() => {setShareMenu(false);setShowStory(true);}} className="block px-3 py-1 w-full text-left hover:bg-white/20">Share to Instagram</button>
+                  <button
+                    onClick={() => {
+                      setShareMenu(false);
+                      setRandomStoryImg(storyImgs[Math.floor(Math.random() * storyImgs.length)]);
+                      setShowStory(true);
+                    }}
+                    className="block px-3 py-1 w-full text-left hover:bg-white/20"
+                  >Share to Instagram</button>
                 </div>
               )}
             </div>
@@ -588,9 +603,9 @@ export default function ChatBox({
           <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-20" onClick={()=>setShowStory(false)}>
             <div onClick={e=>e.stopPropagation()} className="bg-black p-4 rounded-lg">
               <StoryComposer
-                backgroundSrc="/assets/bg.png"
+                backgroundSrc="/assets/space.gif"
                 frameSrc="/assets/frame.png"
-                catGifSrc="/assets/cat1.gif"
+                catGifSrc={randomStoryImg}
                 duserId={userDoc.userId}
                 buttonClass="bg-pink-500 hover:bg-pink-600"
               />

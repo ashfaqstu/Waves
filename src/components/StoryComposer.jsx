@@ -7,7 +7,6 @@ export default function StoryComposer({
   frameSrc,
   catGifSrc, // now just a static image
   duserId = null,
-  downloadFilename = "wave-story.png",
   buttonClass = "",
 }) {
   const canvasRef = useRef(null);
@@ -62,7 +61,13 @@ export default function StoryComposer({
 
     // 3. Draw frame overlay (same 1:1 square, same size as cat)
     ctx.drawImage(frameImg.current, 0, y, size, size);
-  }, [isReady, width, height]);
+  
+    // 4. Draw call to action text below the frame
+    ctx.font = "bold 72px sans-serif";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText(`Wave to ${duserId}`, width / 2, height - 100);
+  }, [isReady, width, height, duserId]);
 
   const handleShareStory = async () => {
     if (processing || !canvasRef.current) return;
@@ -74,22 +79,15 @@ export default function StoryComposer({
 
     canvasRef.current.toBlob(async (blob) => {
       if (!blob) return setProcessing(false);
-      const file = new File([blob], downloadFilename, { type: "image/png" });
-      const shareData = { files: [file], url: shareUrl, title: "Wave Story" };
+      
+      const urlObj = URL.createObjectURL(blob);
+      const igUrl =
+        `https://www.instagram.com/create/story/?backgroundImage=${encodeURIComponent(urlObj)}&url=${encodeURIComponent(shareUrl)}`;
 
       try {
-        if (navigator.canShare?.(shareData)) {
-          await navigator.share(shareData);
-        } else if (navigator.share) {
-          await navigator.share({ url: shareUrl, title: "Wave Story" });
-        } else {
-          const a = document.createElement("a");
-          a.href = shareUrl;
-          a.target = "_blank";
-          a.click();
-        }
+         window.open(igUrl, "_blank");
       } catch {
-        // ignore
+        // ignore 
       }
 
       setProcessing(false);
