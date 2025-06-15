@@ -83,12 +83,32 @@ export default function StoryComposer({
   if (!message) {
     ctx.drawImage(catImg.current, squareX, squareY, squareSide, squareSide);
   } else {
-    // black box behind the text
-    ctx.fillStyle = "black";
-    ctx.fillRect(squareX, squareY, squareSide, squareSide);
+    /// ① black background
+  // Create semi-transparent background
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";  // 50% transparent black
+  ctx.fillRect(squareX, squareY, squareSide, squareSide);
 
-    // wrapped text
-    ctx.fillStyle   = "purple";                // fixed typo ("purples")
+  // ② wrapped text ( *inside the same block* )
+  ctx.fillStyle   = "white";
+  ctx.font        = "40px 'Press Start 2P', sans-serif";
+  ctx.textAlign   = "center";
+  ctx.textBaseline = "top";
+
+  const padding    = 80;
+  const maxW       = squareSide - padding * 2;
+  const lineHeight = 40;
+  const startY     = squareY + padding;
+
+  wrapText(ctx, message, width / 2, startY, maxW, lineHeight);
+    
+    }
+
+  /* ---------- 3. FRAME OVERLAY ---------- */
+  if (!message)ctx.drawImage(frameImg.current, squareX, squareY, squareSide, squareSide);
+
+    if (message) {
+    // wrapped text drawn above the frame so it isn't hidden
+    ctx.fillStyle   = "purple";
     ctx.font        = "20px 'Press Start 2P', sans-serif";
     ctx.textAlign   = "center";
     ctx.textBaseline = "top";
@@ -98,12 +118,10 @@ export default function StoryComposer({
     const lineHeight = 28;                     // 20-px font ≈ 28-px LH
     const startY     = squareY + padding;
 
-    wrapText(ctx, message, width / 2, startY, maxW, lineHeight);
+    wrapText(ctx, "Waved Back", width / 2, startY, maxW, lineHeight);
   }
 
-  /* ---------- 3. FRAME OVERLAY ---------- */
-  ctx.drawImage(frameImg.current, squareX, squareY, squareSide, squareSide);
-
+  
   /* ---------- 4. “WAVES” TITLE + BORDER ---------- */
   ctx.font        = "bold 128px 'Press Start 2P', sans-serif";
   ctx.fillStyle   = "#c084fc";
@@ -113,12 +131,12 @@ export default function StoryComposer({
 
   ctx.strokeStyle = "#c084fc";
   ctx.lineWidth   = 8;
-  ctx.strokeRect(squareX - 60, height - 600, squareSide + 100, 200);
+  ctx.strokeRect(squareX - 60, height - 530, squareSide + 100, 200);
 
   /* ---------- 5. CALL-TO-ACTION ---------- */
   ctx.font      = "bold 60px 'Press Start 2P', sans-serif";
   ctx.fillStyle = "white";
-  ctx.fillText(`Wave to "${duserId}"`, width / 2, height - 500);
+  ctx.fillText(`Wave to "${duserId}"`, width / 2, height - 430);
 
   /* ---------- 6. URL BADGE ---------- */
   const urlText   = "heatnwaves.netlify.app";
@@ -127,17 +145,17 @@ export default function StoryComposer({
   const urlW      = ctx.measureText(urlText).width;
   const urlPad    = 20;
 
-  ctx.fillStyle = "black";
+  ctx.fillStyle = "purple";
   ctx.fillRect(
     width / 2 - urlW / 2 - urlPad,
-    height - 470,
+    height - 400,
     urlW + urlPad * 2,
     63
   );
 
   ctx.fillStyle = "white";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(urlText, width / 2, height - 420);
+  ctx.fillText(urlText, width / 2, height - 350);
 }, [isReady, width, height, duserId, message]);
 
   const handleShareStory = async () => {
