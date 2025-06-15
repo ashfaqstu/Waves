@@ -455,6 +455,14 @@ export default function ChatBox({
   /* ─── settings edit ─── */
   const [newId, setNewId] = useState("");
   const [newName, setNewName] = useState("");
+  const [muteSound, setMuteSound] = useState(
+    localStorage.getItem('muteButtonSound') === 'true'
+  );
+  const toggleMuteSound = () => {
+    const nv = !muteSound;
+    setMuteSound(nv);
+    localStorage.setItem('muteButtonSound', nv ? 'true' : 'false');
+  };
   const openSettings = ()=>{
     setStep("settingsMenu");
   };
@@ -620,8 +628,11 @@ export default function ChatBox({
       <Panel back={()=>setStep("choose")}>
         <h2 className="title mb-4">Settings</h2>
         <div className="space-y-3">
-          <Btn onClick={openProfile}>📝 Profile</Btn>
-          <Btn onClick={openBlockList} className="bg-purple-600 hover:bg-purple-700">🚫 Block List</Btn>
+          <Btn onClick={openProfile}>Profile</Btn>
+          <Btn onClick={openBlockList} className="bg-purple-600 hover:bg-purple-700">Blocked</Btn>
+          <Btn onClick={toggleMuteSound} className="bg-purple-600/40 hover:bg-purple-700">
+            {muteSound ? 'Sounds:OFF' : 'Sounds:ON'}
+          </Btn>
         </div>
       </Panel>
     );

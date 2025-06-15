@@ -7,6 +7,7 @@ export default function useButtonSounds() {
 
     const play = (audio) => {
       audio.currentTime = 0;
+      if (localStorage.getItem('muteButtonSound') === 'true') return;
       audio.play();
     };
 

@@ -57,21 +57,48 @@ export default function StoryComposer({
     // 2. Draw cat image (1:1 square, centered)
     const size = width;
     const y = (height - size) / 2;
-    ctx.drawImage(catImg.current, 0, y, size, size);
+    ctx.drawImage(catImg.current, width/2-size/3, y, size/1.5, size/1.5);
 
     // 3. Draw frame overlay (same 1:1 square, same size as cat)
-    ctx.drawImage(frameImg.current, 0, y, size, size);
+    ctx.drawImage(frameImg.current, width/2-size/3, y, size/1.5, size/1.5);
   // 4. Draw site title at the top
     ctx.font = "bold 128px 'Press Start 2P', sans-serif";
     ctx.fillStyle = "#c084fc"; // tailwind purple-400
     ctx.textAlign = "center";
     ctx.fillText("WAVES", width / 2, 290);
 
+    // Draw decorative border rectangle
+    ctx.strokeStyle = "#c084fc"; // Matching title color (purple)
+    ctx.lineWidth = 8;
+    ctx.strokeRect(width/2-size/3-60, height - 600, size/1.5+100, 200); // x, y, width, height
+
     // 5. Draw call to action text below the frame
-    ctx.font = "bold 72px 'Press Start 2P', sans-serif";
+    ctx.font = "bold 60px 'Press Start 2P', sans-serif";
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
-    ctx.fillText(`Wave to ${duserId}`, width / 2, height - 250);
+    ctx.fillText(`Wave to "${duserId}"`, width / 2, height - 500);
+
+
+    // Add black background for URL text
+    const urlText = `heatnwaves.netlify.app`;
+    ctx.font = "bold 34px 'Press Start 2P', sans-serif";
+    const textMetrics = ctx.measureText(urlText);
+    const textWidth = textMetrics.width;
+    
+    // Draw black background rectangle
+    const padding = 20;
+    ctx.fillStyle = "purple";
+    ctx.fillRect(
+      width / 2 - textWidth / 2 - padding,
+      height - 470, // Position slightly higher than text
+      textWidth + padding * 2-10,
+      63 // Height of background
+    );
+    
+    // Draw text on top
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText(urlText, width / 2, height - 420);
   }, [isReady, width, height, duserId]);
 
   const handleShareStory = async () => {
