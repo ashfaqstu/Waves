@@ -85,11 +85,28 @@ export default function StoryComposer({
         `https://www.instagram.com/create/story/?backgroundImage=${encodeURIComponent(urlObj)}&url=${encodeURIComponent(shareUrl)}`;
 
       try {
-         window.open(igUrl, "_blank");
+        window.location.href = igUrl;
       } catch {
         // ignore 
       }
 
+      setProcessing(false);
+    }, "image/png");
+  };
+
+   const handleDownload = () => {
+    if (processing || !canvasRef.current) return;
+    setProcessing(true);
+    canvasRef.current.toBlob((blob) => {
+      if (!blob) return setProcessing(false);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "wave-story.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       setProcessing(false);
     }, "image/png");
   };
@@ -108,6 +125,13 @@ export default function StoryComposer({
         className={`px-4 py-2 rounded-lg text-white transition ${buttonClass} ${(!isReady || processing) ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
       >
         {processing ? "Processing…" : isReady ? "Share Story" : "Preparing…"}
+      </button>
+      <button
+        onClick={handleDownload}
+        disabled={!isReady || processing}
+        className={`px-4 py-2 rounded-lg text-white transition bg-gray-600 ${(!isReady || processing) ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
+      >
+        {processing ? "Processing…" : isReady ? "Download Image" : "Preparing…"}
       </button>
       <p className="text-xs text-white/60 text-center">
         Shares an image of the story along with your personal link.
