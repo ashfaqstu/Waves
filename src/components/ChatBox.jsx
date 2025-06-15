@@ -61,11 +61,21 @@ const deleteMutual = async (a, b) => {
   await Promise.all([rm(a, b), rm(b, a)]);
 };
 
-const blockUserId = async (blocker, blocked) => {
+const blockUserId = async (blocker, blocked, name = null) => {
+  const snap = await getDocs(
+    query(
+      collection(db, "contacts"),
+      where("ownerId", "==", blocker),
+      where("partnerId", "==", blocked)
+    )
+  );
+  const blockedName = snap.empty ? name : snap.docs[0].data().partnerName;
   await addDoc(collection(db, "blocks"), {
     blockerId: blocker,
     blockedId: blocked,
     createdAt: serverTimestamp(),
+     wasContact: !snap.empty,
+    blockedName,
   });
   await deleteMutual(blocker, blocked).catch(() => {});
 };
@@ -155,6 +165,7 @@ export default function ChatBox({
   const [newWaveId, setNewWaveId] = useState("");
   const [search, setSearch] = useState("");
   const [blocked, setBlocked] = useState(new Set());
+  const [blockedNames, setBlockedNames] = useState({});
   const [activeHeat, setActiveHeat] = useState(null); // id of heat msg showing actions
 
   const [heatEnd, scrollHeat] = useScrollBottom();
@@ -261,6 +272,12 @@ export default function ChatBox({
       query(collection(db, "blocks"), where("blockerId", "==", userDoc.userId)),
       snap => {
         setBlocked(new Set(snap.docs.map(d => d.data().blockedId)));
+        const names = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (data.blockedName) names[data.blockedId] = data.blockedName;
+        });
+        setBlockedNames(names);
       }
     );
     return () => unsub();
@@ -485,7 +502,15 @@ export default function ChatBox({
         where("blockedId", "==", blocked)
       )
     );
-    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+     await Promise.all(
+      snap.docs.map(async d => {
+        const { wasContact, blockedName } = d.data();
+        await deleteDoc(d.ref);
+        if (wasContact) {
+          await saveContact(blocker, blocked, blockedName).catch(() => {});
+        }
+      })
+    );
   };
   const saveSettings = async()=>{
     if(!newId||!newName)return pop("Fill both");
@@ -658,7 +683,7 @@ export default function ChatBox({
         ) : (
           [...blocked].map(id => (
             <div key={id} className="flex justify-between items-center mb-2">
-              <span>{id}</span>
+             <span>{blockedNames[id] || id}</span>
               <button onClick={()=>unblockUserId(userDoc.userId, id)} className="px-2 py-1 bg-red-600 rounded hover:bg-red-700 text-sm">
                 ✔ Unblock
               </button>
@@ -709,7 +734,7 @@ export default function ChatBox({
                         >Add</button>
                       )}
                       <button
-                        onClick={e=>{e.stopPropagation();blockUserId(userDoc.userId,m.senderId||'anon');setActiveHeat(null);}}
+                         onClick={e=>{e.stopPropagation();blockUserId(userDoc.userId,m.senderId||'anon', m.senderName);setActiveHeat(null);}}
                         className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700"
                       >Block</button>
                     </div>
@@ -808,7 +833,7 @@ export default function ChatBox({
         </div>
         {!blocked.has(partnerId) && (
           <button
-            onClick={()=>blockUserId(userDoc.userId, partnerId)}
+            onClick={()=>blockUserId(userDoc.userId, partnerId, partnerName)}
             className="mt-2 w-full text-sm text-red-300 hover:text-red-400"
           >
             Block
